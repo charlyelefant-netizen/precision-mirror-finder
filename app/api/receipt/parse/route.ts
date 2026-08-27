@@ -22,6 +22,11 @@ const receiptSchema = {
   required: ["supplier", "merchant_name", "supplier_evidence", "part_cost", "shipping_cost", "sales_tax", "order_total", "order_number", "confidence", "notes"]
 };
 
+const RECEIPT_PRIMARY_MODEL = "gemini-3.5-flash-lite";
+const RECEIPT_FALLBACK_MODEL = "gemini-3.7-flash";
+const RECEIPT_MAX_ATTEMPTS = 3;
+const RECEIPT_TIMEOUT_MS = 25_000;
+
 const supplierAliases = [
   { name: "Amazon", patterns: [/amazon/i, /amazon\.com/i] },
   { name: "eBay", patterns: [/\bebay\b/i, /ebay\.com/i] },
@@ -125,6 +130,78 @@ function extractJson(text: string) {
   return JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
 }
 
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function parseReceiptWithGemini({
+  apiKey,
+  mimeType,
+  data,
+  model
+}: {
+  apiKey: string;
+  mimeType: string;
+  data: string;
+  model: string;
+}) {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey
+    },
+    signal: AbortSignal.timeout(RECEIPT_TIMEOUT_MS),
+    body: JSON.stringify({
+      contents: [
+        {
+          parts: [
+            {
+              text: [
+                "Read this checkout/order receipt screenshot for an auto mirror purchase.",
+                "Return only JSON.",
+                "Identify the receipt source/store from visible logo, app header, email sender, domain, checkout page, or order confirmation text.",
+                "For supplier, return the canonical marketplace or retailer name, not the individual seller name or product brand.",
+                "Use exactly Amazon for Amazon/Amazon.com receipts and exactly eBay for eBay/eBay.com receipts.",
+                "Other examples: Walmart, RockAuto, AutoZone, O'Reilly Auto Parts, Advance Auto Parts, NAPA, LKQ, Parts Geek, CarParts.com, 1A Auto.",
+                "If an eBay seller or Amazon third-party seller is visible, put that seller in merchant_name while keeping supplier as eBay or Amazon.",
+                "Put the visible clue used to identify supplier in supplier_evidence.",
+                "Extract part_cost before shipping/tax, shipping_cost, sales_tax, order_total, and order_number.",
+                "Use 0 for missing shipping or tax only when the receipt clearly shows free shipping/no tax.",
+                "Do not include customer quote markup."
+              ].join(" ")
+            },
+            {
+              inlineData: {
+                mimeType,
+                data
+              }
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseJsonSchema: receiptSchema
+      }
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Gemini receipt parsing failed with HTTP ${response.status}.`);
+  }
+
+  const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+  const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n") || "";
+  const parsed = extractJson(text);
+
+  if (!parsed) {
+    throw new Error("Gemini did not return receipt JSON.");
+  }
+
+  return parsed;
+}
+
 export async function POST(request: NextRequest) {
   if (!(await hasAdminSession())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -152,66 +229,26 @@ export async function POST(request: NextRequest) {
   }
 
   const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey
-    },
-    signal: AbortSignal.timeout(90_000),
-    body: JSON.stringify({
-      contents: [
-        {
-          parts: [
-            {
-              text: [
-                "Read this checkout/order receipt screenshot for an auto mirror purchase.",
-                "Return only JSON.",
-                "First identify the receipt source/store from the visible logo, app header, email sender, domain, checkout page, or order confirmation text.",
-                "For supplier, return the canonical marketplace or retailer name, not the individual seller name or product brand.",
-                "Use exactly Amazon for Amazon/Amazon.com receipts and exactly eBay for eBay/eBay.com receipts.",
-                "Other canonical examples: Walmart, RockAuto, AutoZone, O'Reilly Auto Parts, Advance Auto Parts, NAPA, LKQ, Parts Geek, CarParts.com, 1A Auto.",
-                "If an eBay seller or Amazon third-party seller is visible, put that seller in merchant_name while keeping supplier as eBay or Amazon.",
-                "If the source is not one of the examples, use the clearest store or marketplace name visible.",
-                "If no store/source is visible, set supplier and merchant_name to empty strings, confidence low, and explain in notes.",
-                "Put the visible clue used to identify the supplier in supplier_evidence, such as logo text, domain, sender, or order page label.",
-                "Extract part_cost before shipping/tax, shipping_cost, sales_tax, order_total, and order_number.",
-                "Use 0 for missing shipping or tax only when the receipt clearly shows free shipping/no tax.",
-                "If a field is not visible, use 0 for numeric fields, empty string for order_number/supplier, confidence low, and explain in notes.",
-                "Do not include customer quote markup."
-              ].join(" ")
-            },
-            {
-              inlineData: {
-                mimeType: file.type,
-                data: base64
-              }
-            }
-          ]
-        }
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseJsonSchema: receiptSchema
-      }
-    })
-  });
-
-  if (!response.ok) {
-    return NextResponse.json(emptyResult(`Gemini receipt parsing failed with HTTP ${response.status}.`), { status: 502 });
-  }
-
-  const payload = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-  const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("\n") || "";
+  let lastError = "Receipt could not be read.";
 
   try {
-    const parsed = extractJson(text);
-    if (!parsed) {
-      return NextResponse.json(emptyResult("Gemini did not return receipt JSON."), { status: 422 });
+    for (let attempt = 1; attempt <= RECEIPT_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const parsed = await parseReceiptWithGemini({ apiKey, mimeType: file.type, data: base64, model: RECEIPT_PRIMARY_MODEL });
+        return NextResponse.json(normalizeParsedReceipt(parsed));
+      } catch (error) {
+        lastError = error instanceof Error ? error.message : lastError;
+        console.info(JSON.stringify({ message: "receipt_parse_attempt_failed", model: RECEIPT_PRIMARY_MODEL, attempt, error: lastError }));
+        if (attempt < RECEIPT_MAX_ATTEMPTS) {
+          await wait(750 * 2 ** (attempt - 1));
+        }
+      }
     }
 
+    const parsed = await parseReceiptWithGemini({ apiKey, mimeType: file.type, data: base64, model: RECEIPT_FALLBACK_MODEL });
     return NextResponse.json(normalizeParsedReceipt(parsed));
-  } catch {
-    return NextResponse.json(emptyResult("Gemini returned malformed receipt JSON."), { status: 422 });
+  } catch (error) {
+    lastError = error instanceof Error ? error.message : lastError;
+    return NextResponse.json(emptyResult(lastError), { status: 502 });
   }
 }
