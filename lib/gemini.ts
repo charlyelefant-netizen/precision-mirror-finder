@@ -259,6 +259,57 @@ function finalizeResearchLinks(research: GeminiMirrorResearch): GeminiMirrorRese
   };
 }
 
+async function productUrlStatus(value: string) {
+  try {
+    const response = await fetch(value, {
+      method: "GET",
+      redirect: "follow",
+      headers: {
+        "User-Agent": "Mozilla/5.0 PrecisionMirrorFinder/1.0",
+        "Accept": "text/html,application/xhtml+xml"
+      },
+      signal: AbortSignal.timeout(7_000)
+    });
+
+    return response.status;
+  } catch {
+    return 0;
+  }
+}
+
+async function validateReturnedProductLinks(research: GeminiMirrorResearch, log: ResearchLogger) {
+  const statuses = new Map<string, number>();
+  const links = new Set<string>();
+
+  for (const option of research.supplier_options) links.add(option.product_link);
+  if (research.oem_option?.product_link) links.add(research.oem_option.product_link);
+  if (research.aftermarket_option?.product_link) links.add(research.aftermarket_option.product_link);
+  for (const option of research.local_pickup_options) links.add(option.product_link);
+
+  await Promise.all([...links].map(async (link) => {
+    const status = await productUrlStatus(link);
+    statuses.set(link, status);
+    if (status === 404 || status === 410 || status === 0) {
+      log("supplier_link_rejected", { link, status });
+    }
+  }));
+
+  function isLive(link: string) {
+    const status = statuses.get(link);
+    return status !== 404 && status !== 410 && status !== 0;
+  }
+
+  const validated = {
+    ...research,
+    supplier_options: research.supplier_options.filter((option) => isLive(option.product_link)),
+    oem_option: research.oem_option && isLive(research.oem_option.product_link) ? research.oem_option : null,
+    aftermarket_option: research.aftermarket_option && isLive(research.aftermarket_option.product_link) ? research.aftermarket_option : null,
+    local_pickup_options: research.local_pickup_options.filter((option) => isLive(option.product_link))
+  };
+
+  return finalizeResearchLinks(validated);
+}
+
 function extractOutputText(payload: unknown): string {
   const response = payload as {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
@@ -412,7 +463,7 @@ export async function researchMirrorWithGemini(submission: MirrorSubmission, log
     if (response.ok) {
       const payload = (await response.json()) as unknown;
       log("gemini_attempt_success", { phase, model, attempt, status: response.status });
-      return parseJsonObject(extractOutputText(payload));
+      return validateReturnedProductLinks(parseJsonObject(extractOutputText(payload)), log);
     }
 
     lastError = `Gemini ${model} request failed with HTTP ${response.status}.`;
