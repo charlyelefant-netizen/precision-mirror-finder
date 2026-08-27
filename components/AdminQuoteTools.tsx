@@ -59,6 +59,20 @@ function vehicleLabel(submission: MirrorSubmission) {
   return submission.vin ? `VIN ${submission.vin}` : "vehicle";
 }
 
+function vehicleSearchLabel(submission: MirrorSubmission) {
+  const manualVehicle = [submission.year, submission.make, submission.model, submission.trim].filter(Boolean).join(" ");
+  if (manualVehicle) {
+    return manualVehicle;
+  }
+
+  const decodedMatch = submission.notes.match(/decodes to an? (.*?)(?:\. The|\. This|$)/i);
+  if (decodedMatch?.[1]) {
+    return decodedMatch[1];
+  }
+
+  return submission.vin || "";
+}
+
 function normalizeShippedOption(option: SupplierOption): QuoteOption {
   return {
     id: `shipped:${option.supplier_name}:${option.product_link}`,
@@ -156,6 +170,21 @@ function Badge({ children }: { children: string }) {
 function openSupplierLink(event: MouseEvent<HTMLAnchorElement>, url: string) {
   event.preventDefault();
   window.location.href = url;
+}
+
+function buildEbaySearchUrl(submission: MirrorSubmission, partNumber: string) {
+  const query = [
+    partNumber,
+    vehicleSearchLabel(submission),
+    submission.side,
+    "side mirror"
+  ].filter(Boolean).join(" ");
+  const params = new URLSearchParams({
+    _nkw: query,
+    _sop: "15"
+  });
+
+  return `https://www.ebay.com/sch/i.html?${params}`;
 }
 
 function OptionCard({
@@ -301,6 +330,7 @@ export function AdminQuoteTools({
 
   const quoteBreakdown = calculateQuote(partPrice);
   const smsHref = `sms:${submission.customer_phone.replace(/[^\d+]/g, "")}?body=${encodeURIComponent(quoteMessage)}`;
+  const ebaySearchHref = buildEbaySearchUrl(submission, partNumber);
 
   return (
     <>
@@ -373,6 +403,13 @@ export function AdminQuoteTools({
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-brand px-3 text-sm font-bold text-white transition hover:bg-blue-800"
             >
               Buy This Part <ExternalLink size={15} aria-hidden="true" />
+            </a>
+            <a
+              href={ebaySearchHref}
+              onClick={(event) => openSupplierLink(event, ebaySearchHref)}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-bold text-ink transition hover:border-brand hover:text-brand"
+            >
+              Search eBay <ExternalLink size={15} aria-hidden="true" />
             </a>
           </div>
           {quoteMessage ? (
