@@ -277,6 +277,17 @@ async function productUrlStatus(value: string) {
   }
 }
 
+function isUnverifiedMarketplaceLink(value: string) {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    const ebayConfigured = Boolean(process.env.EBAY_CLIENT_ID?.trim() && process.env.EBAY_CLIENT_SECRET?.trim());
+
+    return host.includes("ebay.") && !ebayConfigured;
+  } catch {
+    return true;
+  }
+}
+
 async function validateReturnedProductLinks(research: GeminiMirrorResearch, log: ResearchLogger) {
   const statuses = new Map<string, number>();
   const links = new Set<string>();
@@ -287,6 +298,12 @@ async function validateReturnedProductLinks(research: GeminiMirrorResearch, log:
   for (const option of research.local_pickup_options) links.add(option.product_link);
 
   await Promise.all([...links].map(async (link) => {
+    if (isUnverifiedMarketplaceLink(link)) {
+      statuses.set(link, 0);
+      log("supplier_link_rejected", { link, status: "unverified_marketplace_without_api" });
+      return;
+    }
+
     const status = await productUrlStatus(link);
     statuses.set(link, status);
     if (status === 404 || status === 410 || status === 0) {
