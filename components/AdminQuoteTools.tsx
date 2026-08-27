@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { type MouseEvent, useMemo, useState } from "react";
 import { Check, Copy, ExternalLink, MessageSquare, Send } from "lucide-react";
 import type { LocalPickupOption, MirrorSubmission, PartTypeOption, SupplierOption } from "@/lib/types";
 
@@ -146,6 +146,11 @@ function Badge({ children }: { children: string }) {
       : "border-amber-200 bg-amber-50 text-warning";
 
   return <span className={`rounded-md border px-2 py-0.5 text-[11px] font-bold uppercase ${className}`}>{children}</span>;
+}
+
+function openSupplierLink(event: MouseEvent<HTMLAnchorElement>, url: string) {
+  event.preventDefault();
+  window.location.href = url;
 }
 
 function OptionCard({
@@ -350,8 +355,7 @@ export function AdminQuoteTools({
             </button>
             <a
               href={supplierLink}
-              target="_blank"
-              rel="noreferrer"
+              onClick={(event) => openSupplierLink(event, supplierLink)}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-brand px-3 text-sm font-bold text-white transition hover:bg-blue-800"
             >
               Buy This Part <ExternalLink size={15} aria-hidden="true" />
@@ -421,7 +425,7 @@ export function AdminQuoteTools({
         <span className="field-label">Supplier link</span>
         <input name="supplier_link" value={supplierLink} onChange={(event) => setSupplierLink(event.target.value)} className="field-input" type="url" placeholder="https://" />
         {supplierLink ? (
-          <a href={supplierLink} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-brand" target="_blank" rel="noreferrer">
+          <a href={supplierLink} onClick={(event) => openSupplierLink(event, supplierLink)} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-brand">
             Open supplier <ExternalLink size={12} aria-hidden="true" />
           </a>
         ) : null}
