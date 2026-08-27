@@ -14,10 +14,10 @@ export function RequestForm({ submitted, jobId, token }: { submitted: boolean; j
       {submitted && jobId && token ? <ResearchQueueKicker jobId={jobId} token={token} /> : null}
 
       <div className="mb-6">
-        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-brand">Exact-fit sourcing</p>
+        <p className="mb-2 text-xs font-bold uppercase tracking-wide text-brand">Mirror Maven</p>
         <h1 className="text-3xl font-bold tracking-tight text-ink sm:text-4xl">Get your replacement mirror quote</h1>
         <p className="mt-3 max-w-2xl text-base leading-7 text-muted">
-          Send the vehicle details and contact info. The admin team can research, match, quote, and order from one dashboard.
+          Send your vehicle details and contact info, and we&apos;ll get back to you as soon as your quote is ready.
         </p>
       </div>
 

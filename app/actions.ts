@@ -55,7 +55,14 @@ export async function submitMirrorRequest(formData: FormData) {
     quoted_price: "",
     notes: "AI research is in progress...",
     internal_debug: "",
-    tracking_number: ""
+    tracking_number: "",
+    receipt_supplier: "",
+    receipt_part_cost: "",
+    receipt_shipping_cost: "",
+    receipt_sales_tax: "",
+    receipt_total: "",
+    receipt_order_number: "",
+    receipt_debug: ""
   });
 
   await enqueueResearchJob(id);
@@ -98,7 +105,14 @@ export async function updateAdminSubmission(formData: FormData) {
     quoted_price: optionalString(formData, "quoted_price"),
     notes: optionalString(formData, "notes"),
     internal_debug: optionalString(formData, "internal_debug"),
-    tracking_number: optionalString(formData, "tracking_number")
+    tracking_number: optionalString(formData, "tracking_number"),
+    receipt_supplier: optionalString(formData, "receipt_supplier"),
+    receipt_part_cost: optionalString(formData, "receipt_part_cost"),
+    receipt_shipping_cost: optionalString(formData, "receipt_shipping_cost"),
+    receipt_sales_tax: optionalString(formData, "receipt_sales_tax"),
+    receipt_total: optionalString(formData, "receipt_total"),
+    receipt_order_number: optionalString(formData, "receipt_order_number"),
+    receipt_debug: optionalString(formData, "receipt_debug")
   });
 
   revalidatePath("/admin");

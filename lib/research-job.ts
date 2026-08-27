@@ -40,7 +40,14 @@ async function saveResearch(submission: MirrorSubmission, research: GeminiMirror
     quoted_price: "",
     notes: confident ? research.research_summary || "AI research completed." : research.manual_review_reason || "Manual review required.",
     internal_debug: JSON.stringify(research, null, 2),
-    tracking_number: submission.tracking_number || ""
+    tracking_number: submission.tracking_number || "",
+    receipt_supplier: submission.receipt_supplier || "",
+    receipt_part_cost: submission.receipt_part_cost || "",
+    receipt_shipping_cost: submission.receipt_shipping_cost || "",
+    receipt_sales_tax: submission.receipt_sales_tax || "",
+    receipt_total: submission.receipt_total || "",
+    receipt_order_number: submission.receipt_order_number || "",
+    receipt_debug: submission.receipt_debug || ""
   });
 
   logResearch(submission.id, "submission_research_saved", {

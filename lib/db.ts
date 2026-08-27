@@ -38,6 +38,13 @@ const createSqliteSubmissionsSql = `
     notes TEXT NOT NULL DEFAULT '',
     internal_debug TEXT NOT NULL DEFAULT '',
     tracking_number TEXT NOT NULL DEFAULT '',
+    receipt_supplier TEXT NOT NULL DEFAULT '',
+    receipt_part_cost TEXT NOT NULL DEFAULT '',
+    receipt_shipping_cost TEXT NOT NULL DEFAULT '',
+    receipt_sales_tax TEXT NOT NULL DEFAULT '',
+    receipt_total TEXT NOT NULL DEFAULT '',
+    receipt_order_number TEXT NOT NULL DEFAULT '',
+    receipt_debug TEXT NOT NULL DEFAULT '',
     CHECK (status IN (${statusConstraint}))
   );
 `;
@@ -66,7 +73,14 @@ export const createPostgresSubmissionsSql = `
     quoted_price TEXT NOT NULL DEFAULT '',
     notes TEXT NOT NULL DEFAULT '',
     internal_debug TEXT NOT NULL DEFAULT '',
-    tracking_number TEXT NOT NULL DEFAULT ''
+    tracking_number TEXT NOT NULL DEFAULT '',
+    receipt_supplier TEXT NOT NULL DEFAULT '',
+    receipt_part_cost TEXT NOT NULL DEFAULT '',
+    receipt_shipping_cost TEXT NOT NULL DEFAULT '',
+    receipt_sales_tax TEXT NOT NULL DEFAULT '',
+    receipt_total TEXT NOT NULL DEFAULT '',
+    receipt_order_number TEXT NOT NULL DEFAULT '',
+    receipt_debug TEXT NOT NULL DEFAULT ''
   );
 `;
 
@@ -114,7 +128,14 @@ const sqliteColumnsToAdd = [
   "vin TEXT NOT NULL DEFAULT ''",
   "customer_email TEXT NOT NULL DEFAULT ''",
   "internal_debug TEXT NOT NULL DEFAULT ''",
-  "tracking_number TEXT NOT NULL DEFAULT ''"
+  "tracking_number TEXT NOT NULL DEFAULT ''",
+  "receipt_supplier TEXT NOT NULL DEFAULT ''",
+  "receipt_part_cost TEXT NOT NULL DEFAULT ''",
+  "receipt_shipping_cost TEXT NOT NULL DEFAULT ''",
+  "receipt_sales_tax TEXT NOT NULL DEFAULT ''",
+  "receipt_total TEXT NOT NULL DEFAULT ''",
+  "receipt_order_number TEXT NOT NULL DEFAULT ''",
+  "receipt_debug TEXT NOT NULL DEFAULT ''"
 ];
 
 function migrateSqliteStatusConstraint(database: SqliteDatabase) {
@@ -138,7 +159,8 @@ function migrateSqliteStatusConstraint(database: SqliteDatabase) {
     INSERT INTO submissions (
       id, created_at, vin, year, make, model, trim, features, side, color, customer_name, customer_phone, customer_email,
       status, matched_part_number, matched_part_price, supplier_name, supplier_link, estimated_shipping,
-      quoted_price, notes, internal_debug, tracking_number
+      quoted_price, notes, internal_debug, tracking_number, receipt_supplier, receipt_part_cost, receipt_shipping_cost,
+      receipt_sales_tax, receipt_total, receipt_order_number, receipt_debug
     )
     SELECT
       id, created_at, vin, year, make, model, trim, features, side, color, customer_name, customer_phone, customer_email,
@@ -149,7 +171,8 @@ function migrateSqliteStatusConstraint(database: SqliteDatabase) {
         ELSE status
       END,
       matched_part_number, matched_part_price, supplier_name, supplier_link, estimated_shipping,
-      quoted_price, notes, internal_debug, tracking_number
+      quoted_price, notes, internal_debug, tracking_number, receipt_supplier, receipt_part_cost, receipt_shipping_cost,
+      receipt_sales_tax, receipt_total, receipt_order_number, receipt_debug
     FROM submissions_old;
     DROP TABLE submissions_old;
   `);
@@ -198,6 +221,20 @@ async function queryPostgres(query: string, params: unknown[] = []) {
   }
 }
 
+async function addMissingPostgresColumns() {
+  const columns = [
+    "ADD COLUMN IF NOT EXISTS receipt_supplier TEXT NOT NULL DEFAULT ''",
+    "ADD COLUMN IF NOT EXISTS receipt_part_cost TEXT NOT NULL DEFAULT ''",
+    "ADD COLUMN IF NOT EXISTS receipt_shipping_cost TEXT NOT NULL DEFAULT ''",
+    "ADD COLUMN IF NOT EXISTS receipt_sales_tax TEXT NOT NULL DEFAULT ''",
+    "ADD COLUMN IF NOT EXISTS receipt_total TEXT NOT NULL DEFAULT ''",
+    "ADD COLUMN IF NOT EXISTS receipt_order_number TEXT NOT NULL DEFAULT ''",
+    "ADD COLUMN IF NOT EXISTS receipt_debug TEXT NOT NULL DEFAULT ''"
+  ];
+
+  await queryPostgres(`ALTER TABLE submissions ${columns.join(", ")}`);
+}
+
 export async function migrateDatabase() {
   if (!isPostgres()) {
     getSqliteDb();
@@ -208,6 +245,7 @@ export async function migrateDatabase() {
 
   await queryPostgres(createPostgresSubmissionsSql);
   await queryPostgres(createPostgresResearchJobsSql);
+  await addMissingPostgresColumns();
   postgresMigrated = true;
 }
 
@@ -319,6 +357,13 @@ export async function updateSubmission(id: number, input: {
   notes: string;
   internal_debug?: string;
   tracking_number?: string;
+  receipt_supplier?: string;
+  receipt_part_cost?: string;
+  receipt_shipping_cost?: string;
+  receipt_sales_tax?: string;
+  receipt_total?: string;
+  receipt_order_number?: string;
+  receipt_debug?: string;
 }) {
   await migrateDatabase();
 
@@ -328,9 +373,16 @@ export async function updateSubmission(id: number, input: {
 
   const values = {
     id,
+    ...input,
     internal_debug: input.internal_debug || "",
     tracking_number: input.tracking_number || "",
-    ...input
+    receipt_supplier: input.receipt_supplier || "",
+    receipt_part_cost: input.receipt_part_cost || "",
+    receipt_shipping_cost: input.receipt_shipping_cost || "",
+    receipt_sales_tax: input.receipt_sales_tax || "",
+    receipt_total: input.receipt_total || "",
+    receipt_order_number: input.receipt_order_number || "",
+    receipt_debug: input.receipt_debug || ""
   };
 
   if (isPostgres()) {
@@ -346,8 +398,15 @@ export async function updateSubmission(id: number, input: {
         quoted_price = $7,
         notes = $8,
         internal_debug = $9,
-        tracking_number = $10
-      WHERE id = $11
+        tracking_number = $10,
+        receipt_supplier = $11,
+        receipt_part_cost = $12,
+        receipt_shipping_cost = $13,
+        receipt_sales_tax = $14,
+        receipt_total = $15,
+        receipt_order_number = $16,
+        receipt_debug = $17
+      WHERE id = $18
     `,
       [
         values.status,
@@ -360,6 +419,13 @@ export async function updateSubmission(id: number, input: {
         values.notes,
         values.internal_debug,
         values.tracking_number,
+        values.receipt_supplier,
+        values.receipt_part_cost,
+        values.receipt_shipping_cost,
+        values.receipt_sales_tax,
+        values.receipt_total,
+        values.receipt_order_number,
+        values.receipt_debug,
         id
       ]
     );
@@ -377,7 +443,14 @@ export async function updateSubmission(id: number, input: {
         quoted_price = @quoted_price,
         notes = @notes,
         internal_debug = @internal_debug,
-        tracking_number = @tracking_number
+        tracking_number = @tracking_number,
+        receipt_supplier = @receipt_supplier,
+        receipt_part_cost = @receipt_part_cost,
+        receipt_shipping_cost = @receipt_shipping_cost,
+        receipt_sales_tax = @receipt_sales_tax,
+        receipt_total = @receipt_total,
+        receipt_order_number = @receipt_order_number,
+        receipt_debug = @receipt_debug
       WHERE id = @id
     `)
     .run(values);

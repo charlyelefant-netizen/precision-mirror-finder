@@ -26,6 +26,13 @@ export type MirrorSubmission = {
   notes: string;
   internal_debug: string;
   tracking_number: string;
+  receipt_supplier: string;
+  receipt_part_cost: string;
+  receipt_shipping_cost: string;
+  receipt_sales_tax: string;
+  receipt_total: string;
+  receipt_order_number: string;
+  receipt_debug: string;
 };
 
 export type SubmissionRow = Omit<MirrorSubmission, "created_at" | "features"> & {

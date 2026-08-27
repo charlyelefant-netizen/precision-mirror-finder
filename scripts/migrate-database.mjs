@@ -43,6 +43,13 @@ const createSqliteSubmissionsSql = `
     notes TEXT NOT NULL DEFAULT '',
     internal_debug TEXT NOT NULL DEFAULT '',
     tracking_number TEXT NOT NULL DEFAULT '',
+    receipt_supplier TEXT NOT NULL DEFAULT '',
+    receipt_part_cost TEXT NOT NULL DEFAULT '',
+    receipt_shipping_cost TEXT NOT NULL DEFAULT '',
+    receipt_sales_tax TEXT NOT NULL DEFAULT '',
+    receipt_total TEXT NOT NULL DEFAULT '',
+    receipt_order_number TEXT NOT NULL DEFAULT '',
+    receipt_debug TEXT NOT NULL DEFAULT '',
     CHECK (status IN (${statusConstraint}))
   );
 `;
@@ -71,7 +78,14 @@ const createPostgresSubmissionsSql = `
     quoted_price TEXT NOT NULL DEFAULT '',
     notes TEXT NOT NULL DEFAULT '',
     internal_debug TEXT NOT NULL DEFAULT '',
-    tracking_number TEXT NOT NULL DEFAULT ''
+    tracking_number TEXT NOT NULL DEFAULT '',
+    receipt_supplier TEXT NOT NULL DEFAULT '',
+    receipt_part_cost TEXT NOT NULL DEFAULT '',
+    receipt_shipping_cost TEXT NOT NULL DEFAULT '',
+    receipt_sales_tax TEXT NOT NULL DEFAULT '',
+    receipt_total TEXT NOT NULL DEFAULT '',
+    receipt_order_number TEXT NOT NULL DEFAULT '',
+    receipt_debug TEXT NOT NULL DEFAULT ''
   );
 `;
 
@@ -112,7 +126,14 @@ function migrateSqlite() {
     "vin TEXT NOT NULL DEFAULT ''",
     "customer_email TEXT NOT NULL DEFAULT ''",
     "internal_debug TEXT NOT NULL DEFAULT ''",
-    "tracking_number TEXT NOT NULL DEFAULT ''"
+    "tracking_number TEXT NOT NULL DEFAULT ''",
+    "receipt_supplier TEXT NOT NULL DEFAULT ''",
+    "receipt_part_cost TEXT NOT NULL DEFAULT ''",
+    "receipt_shipping_cost TEXT NOT NULL DEFAULT ''",
+    "receipt_sales_tax TEXT NOT NULL DEFAULT ''",
+    "receipt_total TEXT NOT NULL DEFAULT ''",
+    "receipt_order_number TEXT NOT NULL DEFAULT ''",
+    "receipt_debug TEXT NOT NULL DEFAULT ''"
   ]) {
     const columnName = column.split(" ")[0];
     if (!existing.has(columnName)) {
@@ -131,6 +152,16 @@ async function migratePostgres() {
   try {
     await pool.query(createPostgresSubmissionsSql);
     await pool.query(createPostgresResearchJobsSql);
+    await pool.query(`
+      ALTER TABLE submissions
+        ADD COLUMN IF NOT EXISTS receipt_supplier TEXT NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS receipt_part_cost TEXT NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS receipt_shipping_cost TEXT NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS receipt_sales_tax TEXT NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS receipt_total TEXT NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS receipt_order_number TEXT NOT NULL DEFAULT '',
+        ADD COLUMN IF NOT EXISTS receipt_debug TEXT NOT NULL DEFAULT ''
+    `);
   } finally {
     await pool.end();
   }

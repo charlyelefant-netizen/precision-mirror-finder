@@ -1,7 +1,7 @@
 "use client";
 
 import { type MouseEvent, useMemo, useState } from "react";
-import { Check, Copy, ExternalLink, MessageSquare, Send } from "lucide-react";
+import { Check, Copy, ExternalLink, Loader2, MessageSquare, Send, Upload } from "lucide-react";
 import type { LocalPickupOption, MirrorSubmission, PartTypeOption, SupplierOption } from "@/lib/types";
 
 type QuoteOption = {
@@ -26,6 +26,24 @@ function parsePrice(value: string) {
 
 function formatMoney(value: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value);
+}
+
+function calculateQuoteTotals(price: string, shipping: number, taxRate: number, taxOverride?: number) {
+  const part = parsePrice(price);
+  const shippingAmount = Number.isFinite(shipping) ? shipping : 0;
+  const taxable = part + shippingAmount;
+  const tax = taxOverride === undefined ? taxable * taxRate : taxOverride;
+  const markup = 120;
+  const total = taxable + tax + markup;
+
+  return {
+    part,
+    shipping: shippingAmount,
+    tax,
+    markup,
+    total,
+    totalText: formatMoney(total)
+  };
 }
 
 function isProductPageUrl(value: string) {
@@ -191,6 +209,20 @@ function buildEbaySearchUrl(submission: MirrorSubmission, partNumber: string) {
   return `https://www.ebay.com/sch/i.html?${params}`;
 }
 
+function buildAmazonSearchUrl(submission: MirrorSubmission, partNumber: string) {
+  const query = [
+    partNumber,
+    vehicleSearchLabel(submission),
+    submission.side,
+    "side mirror"
+  ].filter(Boolean).join(" ");
+  const params = new URLSearchParams({
+    k: query
+  });
+
+  return `https://www.amazon.com/s?${params}`;
+}
+
 function OptionCard({
   option,
   selected,
@@ -265,7 +297,8 @@ export function AdminQuoteTools({
   const initialShippingCost = initialOption?.shipping_cost || 0;
   const initialSupplierName = useSavedSupplier ? submission.supplier_name || initialOption?.supplier_name || "" : initialOption?.supplier_name || submission.supplier_name || "";
   const initialEstimatedShipping = useSavedSupplier ? submission.estimated_shipping || initialOption?.estimated_shipping || "" : initialOption?.estimated_shipping || submission.estimated_shipping || "";
-  const initialQuote = initialPartPrice ? calculateQuote(initialPartPrice, initialShippingCost).totalText : "";
+  const initialReceiptTax = submission.receipt_sales_tax.trim() ? parsePrice(submission.receipt_sales_tax) : undefined;
+  const initialQuote = initialPartPrice ? calculateQuoteTotals(initialPartPrice, initialShippingCost, taxRate, initialReceiptTax).totalText : "";
   const [partNumber, setPartNumber] = useState(initialPartNumber);
   const [partPrice, setPartPrice] = useState(initialPartPrice);
   const [shippingCost, setShippingCost] = useState(String(initialShippingCost));
@@ -275,27 +308,34 @@ export function AdminQuoteTools({
   const [quotedPrice, setQuotedPrice] = useState(() => submission.quoted_price || initialQuote);
   const [quoteMessage, setQuoteMessage] = useState(() => initialOption ? buildQuoteMessage(submission.quoted_price || initialQuote, initialOption.estimated_shipping) : "");
   const [copied, setCopied] = useState(false);
+  const [receiptSupplier, setReceiptSupplier] = useState(submission.receipt_supplier || "");
+  const [receiptPartCost, setReceiptPartCost] = useState(submission.receipt_part_cost || "");
+  const [receiptShippingCost, setReceiptShippingCost] = useState(submission.receipt_shipping_cost || "");
+  const [receiptSalesTax, setReceiptSalesTax] = useState(submission.receipt_sales_tax || "");
+  const [receiptTotal, setReceiptTotal] = useState(submission.receipt_total || "");
+  const [receiptOrderNumber, setReceiptOrderNumber] = useState(submission.receipt_order_number || "");
+  const [receiptDebug, setReceiptDebug] = useState(submission.receipt_debug || "");
+  const [receiptUploadState, setReceiptUploadState] = useState<"idle" | "parsing" | "done" | "error">("idle");
+  const [receiptUploadMessage, setReceiptUploadMessage] = useState("");
 
-  function calculateQuote(price: string, shipping = parsePrice(shippingCost)) {
-    const part = parsePrice(price);
-    const shippingAmount = Number.isFinite(shipping) ? shipping : 0;
-    const taxable = part + shippingAmount;
-    const tax = taxable * taxRate;
-    const markup = 120;
-    const total = taxable + tax + markup;
+  function receiptTaxOverride() {
+    return receiptSalesTax.trim() ? parsePrice(receiptSalesTax) : undefined;
+  }
 
-    return {
-      part,
-      shipping: shippingAmount,
-      tax,
-      markup,
-      total,
-      totalText: formatMoney(total)
-    };
+  function calculateQuote(price: string, shipping = parsePrice(shippingCost), taxOverride = receiptTaxOverride()) {
+    return calculateQuoteTotals(price, shipping, taxRate, taxOverride);
   }
 
   function recalculateQuote(price = partPrice, shipping = parsePrice(shippingCost)) {
     setQuotedPrice(calculateQuote(price, shipping).totalText);
+  }
+
+  function applyReceiptNumbers(nextPartCost: string, nextShippingCost: string, nextSalesTax: string) {
+    const newQuote = calculateQuote(nextPartCost || partPrice, parsePrice(nextShippingCost), nextSalesTax.trim() ? parsePrice(nextSalesTax) : undefined);
+    setPartPrice(nextPartCost || partPrice);
+    setShippingCost(String(parsePrice(nextShippingCost)));
+    setQuotedPrice(newQuote.totalText);
+    setQuoteMessage(buildQuoteMessage(newQuote.totalText, estimatedShipping));
   }
 
   function buildQuoteMessage(totalText: string, deliveryText: string) {
@@ -332,9 +372,54 @@ export function AdminQuoteTools({
     setCopied(true);
   }
 
+  async function parseReceipt(file: File | null) {
+    if (!file) return;
+
+    setReceiptUploadState("parsing");
+    setReceiptUploadMessage("Reading receipt...");
+
+    const body = new FormData();
+    body.set("receipt", file);
+
+    try {
+      const response = await fetch("/api/receipt/parse", {
+        method: "POST",
+        body
+      });
+      const parsed = await response.json();
+
+      if (!response.ok) {
+        throw new Error(parsed.notes || parsed.error || "Receipt could not be read.");
+      }
+
+      const parsedPartCost = parsed.part_cost || "";
+      const parsedShippingCost = parsed.shipping_cost || "$0.00";
+      const parsedSalesTax = parsed.sales_tax || "$0.00";
+      const parsedSupplier = parsed.supplier || supplierName;
+      const parsedOrderTotal = parsed.order_total || "";
+      const parsedOrderNumber = parsed.order_number || "";
+      setReceiptSupplier(parsedSupplier);
+      setReceiptPartCost(parsedPartCost);
+      setReceiptShippingCost(parsedShippingCost);
+      setReceiptSalesTax(parsedSalesTax);
+      setReceiptTotal(parsedOrderTotal);
+      setReceiptOrderNumber(parsedOrderNumber);
+      setReceiptDebug(JSON.stringify(parsed.raw || parsed, null, 2));
+      setSupplierName(parsedSupplier || supplierName);
+      applyReceiptNumbers(parsedPartCost, parsedShippingCost, parsedSalesTax);
+      setReceiptUploadState("done");
+      setReceiptUploadMessage(parsed.confidence === "low" ? `Check these numbers: ${parsed.notes || "low confidence parse"}` : "Receipt read. Review the numbers, then save.");
+    } catch (error) {
+      setReceiptUploadState("error");
+      setReceiptUploadMessage(error instanceof Error ? error.message : "Receipt could not be read.");
+    }
+  }
+
   const quoteBreakdown = calculateQuote(partPrice);
+  const taxLabel = receiptSalesTax.trim() ? "Receipt tax" : "Estimated NJ tax";
   const smsHref = `sms:${submission.customer_phone.replace(/[^\d+]/g, "")}?body=${encodeURIComponent(quoteMessage)}`;
   const ebaySearchHref = buildEbaySearchUrl(submission, partNumber);
+  const amazonSearchHref = buildAmazonSearchUrl(submission, partNumber);
 
   return (
     <>
@@ -415,6 +500,13 @@ export function AdminQuoteTools({
             >
               Search eBay <ExternalLink size={15} aria-hidden="true" />
             </a>
+            <a
+              href={amazonSearchHref}
+              onClick={(event) => openSupplierLink(event, amazonSearchHref)}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-bold text-ink transition hover:border-brand hover:text-brand"
+            >
+              Search Amazon <ExternalLink size={15} aria-hidden="true" />
+            </a>
           </div>
           {quoteMessage ? (
             <div className="space-y-2">
@@ -433,6 +525,93 @@ export function AdminQuoteTools({
           ) : null}
         </div>
       ) : null}
+
+      <div className="space-y-4 rounded-md border border-line bg-white p-4 sm:col-span-2 lg:col-span-4">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="text-sm font-bold uppercase tracking-wide text-ink">Purchased Part / Receipt</h3>
+            <p className="mt-1 text-sm text-muted">Upload an order or checkout screenshot to fill the actual cost fields.</p>
+          </div>
+          <label className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-brand bg-white px-3 text-sm font-bold text-brand transition hover:bg-brand-soft">
+            {receiptUploadState === "parsing" ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Upload size={16} aria-hidden="true" />}
+            {receiptUploadState === "parsing" ? "Reading..." : "Upload Receipt"}
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              className="sr-only"
+              onChange={(event) => parseReceipt(event.target.files?.[0] || null)}
+            />
+          </label>
+        </div>
+
+        {receiptUploadMessage ? (
+          <p className={`rounded-md p-3 text-sm font-semibold ${
+            receiptUploadState === "error"
+              ? "border border-red-200 bg-red-50 text-danger"
+              : "border border-green-200 bg-green-50 text-green-900"
+          }`}>
+            {receiptUploadMessage}
+          </p>
+        ) : null}
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="space-y-2">
+            <span className="field-label">Receipt supplier</span>
+            <input name="receipt_supplier" value={receiptSupplier} onChange={(event) => setReceiptSupplier(event.target.value)} className="field-input" placeholder="eBay, Amazon, etc." />
+          </label>
+          <label className="space-y-2">
+            <span className="field-label">Actual part cost</span>
+            <input
+              name="receipt_part_cost"
+              value={receiptPartCost}
+              onChange={(event) => {
+                setReceiptPartCost(event.target.value);
+                applyReceiptNumbers(event.target.value, receiptShippingCost, receiptSalesTax);
+              }}
+              className="field-input"
+              placeholder="$0.00"
+              inputMode="decimal"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="field-label">Actual shipping</span>
+            <input
+              name="receipt_shipping_cost"
+              value={receiptShippingCost}
+              onChange={(event) => {
+                setReceiptShippingCost(event.target.value);
+                applyReceiptNumbers(receiptPartCost, event.target.value, receiptSalesTax);
+              }}
+              className="field-input"
+              placeholder="$0.00"
+              inputMode="decimal"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="field-label">Actual sales tax</span>
+            <input
+              name="receipt_sales_tax"
+              value={receiptSalesTax}
+              onChange={(event) => {
+                setReceiptSalesTax(event.target.value);
+                applyReceiptNumbers(receiptPartCost, receiptShippingCost, event.target.value);
+              }}
+              className="field-input"
+              placeholder="$0.00"
+              inputMode="decimal"
+            />
+          </label>
+          <label className="space-y-2">
+            <span className="field-label">Receipt total</span>
+            <input name="receipt_total" value={receiptTotal} onChange={(event) => setReceiptTotal(event.target.value)} className="field-input" placeholder="$0.00" inputMode="decimal" />
+          </label>
+          <label className="space-y-2">
+            <span className="field-label">Order number</span>
+            <input name="receipt_order_number" value={receiptOrderNumber} onChange={(event) => setReceiptOrderNumber(event.target.value)} className="field-input" placeholder="Order or item number" />
+          </label>
+        </div>
+        <input type="hidden" name="receipt_debug" value={receiptDebug} />
+      </div>
 
       <label className="space-y-2">
         <span className="field-label">Matched part number</span>
@@ -468,7 +647,7 @@ export function AdminQuoteTools({
         <div className="rounded-md border border-line bg-white p-3 text-sm text-ink sm:col-span-2 lg:col-span-4">
           <p className="font-bold">Quote breakdown</p>
           <p className="mt-1 text-muted">
-            Part: {formatMoney(quoteBreakdown.part)} + Shipping: {formatMoney(quoteBreakdown.shipping)} + Tax: {formatMoney(quoteBreakdown.tax)} + Markup: {formatMoney(quoteBreakdown.markup)} = Total: {quoteBreakdown.totalText}
+            Part: {formatMoney(quoteBreakdown.part)} + Shipping: {formatMoney(quoteBreakdown.shipping)} + {taxLabel}: {formatMoney(quoteBreakdown.tax)} + Markup: {formatMoney(quoteBreakdown.markup)} = Total: {quoteBreakdown.totalText}
           </p>
         </div>
       ) : null}
