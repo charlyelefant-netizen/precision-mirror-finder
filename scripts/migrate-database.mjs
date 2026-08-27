@@ -75,11 +75,37 @@ const createPostgresSubmissionsSql = `
   );
 `;
 
+const createSqliteResearchJobsSql = `
+  CREATE TABLE IF NOT EXISTS research_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    submission_id INTEGER NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'queued',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (status IN ('queued', 'processing', 'completed', 'failed'))
+  );
+`;
+
+const createPostgresResearchJobsSql = `
+  CREATE TABLE IF NOT EXISTS research_jobs (
+    id SERIAL PRIMARY KEY,
+    submission_id INTEGER NOT NULL UNIQUE REFERENCES submissions(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'processing', 'completed', 'failed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+`;
+
 function migrateSqlite() {
   fs.mkdirSync(path.dirname(sqlitePath), { recursive: true });
   const db = new Database(sqlitePath);
   db.pragma("journal_mode = WAL");
   db.exec(createSqliteSubmissionsSql);
+  db.exec(createSqliteResearchJobsSql);
 
   const existing = new Set(db.prepare("PRAGMA table_info(submissions)").all().map((column) => column.name));
   for (const column of [
@@ -104,6 +130,7 @@ async function migratePostgres() {
 
   try {
     await pool.query(createPostgresSubmissionsSql);
+    await pool.query(createPostgresResearchJobsSql);
   } finally {
     await pool.end();
   }

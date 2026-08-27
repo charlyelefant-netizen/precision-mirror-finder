@@ -2,10 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { after } from "next/server";
 import { clearAdminSession, isValidPassword, setAdminSession } from "@/lib/auth";
-import { createSubmission, deleteSubmission, updateSubmission } from "@/lib/db";
-import { runResearchForSubmission } from "@/lib/research-job";
+import { createSubmission, deleteSubmission, enqueueResearchJob, updateSubmission } from "@/lib/db";
 import { STATUSES, type SubmissionStatus } from "@/lib/types";
 
 function requiredString(formData: FormData, key: string) {
@@ -59,9 +57,7 @@ export async function submitMirrorRequest(formData: FormData) {
     tracking_number: ""
   });
 
-  after(async () => {
-    await runResearchForSubmission(id);
-  });
+  await enqueueResearchJob(id);
 
   revalidatePath("/admin");
   redirect("/?submitted=1");

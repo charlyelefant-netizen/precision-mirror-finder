@@ -23,6 +23,7 @@ ADMIN_PASSWORD=replace-this-with-your-admin-password
 GEMINI_API_KEY=replace-this-with-your-gemini-api-key
 SALES_TAX_RATE=0.06625
 AUTH_SECRET=replace-this-with-a-long-random-string
+CRON_SECRET=replace-this-with-a-long-random-string
 DATABASE_URL=file:./data/precision-mirror-finder.sqlite
 ```
 
@@ -42,6 +43,16 @@ Run the hosted Postgres migration explicitly:
 
 ```bash
 node scripts/migrate-database.mjs --postgres
+```
+
+## Background Research Queue
+
+Customer submissions enqueue a research job and redirect immediately. Vercel Cron calls `/api/research/process` once per minute to run Gemini research in a separate worker function with a longer timeout.
+
+In production, protect that endpoint with:
+
+```bash
+CRON_SECRET=<a long random string>
 ```
 
 ## Go Live Checklist
@@ -74,6 +85,7 @@ git push -u origin main
 ADMIN_PASSWORD=<your admin dashboard password>
 GEMINI_API_KEY=<your Gemini API key>
 AUTH_SECRET=<a long random string>
+CRON_SECRET=<a long random string>
 SALES_TAX_RATE=0.06625
 ```
 

@@ -4,6 +4,11 @@ import path from "node:path";
 import { STATUSES, type MirrorSubmission, type SubmissionRow, type SubmissionStatus } from "@/lib/types";
 
 type SqliteDatabase = Database.Database;
+export type ResearchJob = {
+  id: number;
+  submission_id: number;
+  attempts: number;
+};
 
 const DEFAULT_SQLITE_PATH = path.join(process.cwd(), "data", "precision-mirror-finder.sqlite");
 const statusConstraint = STATUSES.map((status) => `'${status}'`).join(", ");
@@ -62,6 +67,31 @@ export const createPostgresSubmissionsSql = `
     notes TEXT NOT NULL DEFAULT '',
     internal_debug TEXT NOT NULL DEFAULT '',
     tracking_number TEXT NOT NULL DEFAULT ''
+  );
+`;
+
+const createSqliteResearchJobsSql = `
+  CREATE TABLE IF NOT EXISTS research_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    submission_id INTEGER NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'queued',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (status IN ('queued', 'processing', 'completed', 'failed'))
+  );
+`;
+
+export const createPostgresResearchJobsSql = `
+  CREATE TABLE IF NOT EXISTS research_jobs (
+    id SERIAL PRIMARY KEY,
+    submission_id INTEGER NOT NULL UNIQUE REFERENCES submissions(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'processing', 'completed', 'failed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   );
 `;
 
@@ -145,6 +175,7 @@ function getSqliteDb() {
     sqliteDb = new Database(dbPath);
     sqliteDb.pragma("journal_mode = WAL");
     sqliteDb.exec(createSqliteSubmissionsSql);
+    sqliteDb.exec(createSqliteResearchJobsSql);
     addMissingSqliteColumns(sqliteDb);
     migrateSqliteStatusConstraint(sqliteDb);
   }
@@ -176,6 +207,7 @@ export async function migrateDatabase() {
   if (postgresMigrated) return;
 
   await queryPostgres(createPostgresSubmissionsSql);
+  await queryPostgres(createPostgresResearchJobsSql);
   postgresMigrated = true;
 }
 
@@ -358,5 +390,113 @@ export async function deleteSubmission(id: number) {
     return queryPostgres("DELETE FROM submissions WHERE id = $1", [id]);
   }
 
+  getSqliteDb().prepare("DELETE FROM research_jobs WHERE submission_id = ?").run(id);
   return getSqliteDb().prepare("DELETE FROM submissions WHERE id = ?").run(id);
+}
+
+export async function enqueueResearchJob(submissionId: number) {
+  await migrateDatabase();
+
+  if (isPostgres()) {
+    return queryPostgres(
+      `
+      INSERT INTO research_jobs (submission_id, status, last_error, updated_at)
+      VALUES ($1, 'queued', '', NOW())
+      ON CONFLICT (submission_id) DO UPDATE SET
+        status = CASE
+          WHEN research_jobs.status = 'completed' THEN research_jobs.status
+          ELSE 'queued'
+        END,
+        last_error = '',
+        updated_at = NOW()
+    `,
+      [submissionId]
+    );
+  }
+
+  return getSqliteDb()
+    .prepare(`
+      INSERT INTO research_jobs (submission_id, status, last_error, updated_at)
+      VALUES (?, 'queued', '', CURRENT_TIMESTAMP)
+      ON CONFLICT(submission_id) DO UPDATE SET
+        status = CASE
+          WHEN status = 'completed' THEN status
+          ELSE 'queued'
+        END,
+        last_error = '',
+        updated_at = CURRENT_TIMESTAMP
+    `)
+    .run(submissionId);
+}
+
+export async function claimNextResearchJob(): Promise<ResearchJob | null> {
+  await migrateDatabase();
+
+  if (isPostgres()) {
+    const result = await queryPostgres(`
+      WITH next_job AS (
+        SELECT id
+        FROM research_jobs
+        WHERE status = 'queued'
+          OR (status = 'processing' AND updated_at < NOW() - INTERVAL '10 minutes')
+          OR (status = 'failed' AND attempts < 3)
+        ORDER BY created_at ASC, id ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+      )
+      UPDATE research_jobs
+      SET status = 'processing',
+          attempts = attempts + 1,
+          updated_at = NOW()
+      WHERE id IN (SELECT id FROM next_job)
+      RETURNING id, submission_id, attempts
+    `);
+
+    return result.rows[0] ? (result.rows[0] as ResearchJob) : null;
+  }
+
+  const database = getSqliteDb();
+  const job = database
+    .prepare(`
+      SELECT id, submission_id, attempts
+      FROM research_jobs
+      WHERE status = 'queued'
+        OR status = 'processing'
+        OR (status = 'failed' AND attempts < 3)
+      ORDER BY datetime(created_at) ASC, id ASC
+      LIMIT 1
+    `)
+    .get() as ResearchJob | undefined;
+
+  if (!job) return null;
+
+  database
+    .prepare("UPDATE research_jobs SET status = 'processing', attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    .run(job.id);
+
+  return { ...job, attempts: job.attempts + 1 };
+}
+
+export async function completeResearchJob(id: number) {
+  await migrateDatabase();
+
+  if (isPostgres()) {
+    return queryPostgres("UPDATE research_jobs SET status = 'completed', last_error = '', updated_at = NOW() WHERE id = $1", [id]);
+  }
+
+  return getSqliteDb()
+    .prepare("UPDATE research_jobs SET status = 'completed', last_error = '', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    .run(id);
+}
+
+export async function failResearchJob(id: number, error: string) {
+  await migrateDatabase();
+
+  if (isPostgres()) {
+    return queryPostgres("UPDATE research_jobs SET status = 'failed', last_error = $1, updated_at = NOW() WHERE id = $2", [error, id]);
+  }
+
+  return getSqliteDb()
+    .prepare("UPDATE research_jobs SET status = 'failed', last_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    .run(error, id);
 }
