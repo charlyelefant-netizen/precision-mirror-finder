@@ -23,6 +23,7 @@ const researchSchema = {
         properties: {
           part_number: { type: "string" },
           part_type: { type: "string", enum: ["OEM", "Aftermarket"] },
+          condition: { type: "string", enum: ["New", "Used", "Remanufactured", "Refurbished", "Unknown"] },
           supplier_name: { type: "string" },
           price: { type: "string" },
           shipping_cost: { type: "number" },
@@ -45,6 +46,7 @@ const researchSchema = {
           type: "object",
           properties: {
             part_type: { type: "string", enum: ["OEM"] },
+            condition: { type: "string", enum: ["New", "Used", "Remanufactured", "Refurbished", "Unknown"] },
             part_number: { type: "string" },
             supplier_name: { type: "string" },
             price: { type: "string" },
@@ -66,6 +68,7 @@ const researchSchema = {
           type: "object",
           properties: {
             part_type: { type: "string", enum: ["Aftermarket"] },
+            condition: { type: "string", enum: ["New", "Used", "Remanufactured", "Refurbished", "Unknown"] },
             part_number: { type: "string" },
             supplier_name: { type: "string" },
             price: { type: "string" },
@@ -171,6 +174,7 @@ function normalizePartTypeOption(option: Partial<NonNullable<GeminiMirrorResearc
 
   return {
     part_type: partType,
+    condition: normalizeCondition(option.condition),
     part_number: String(option.part_number || ""),
     supplier_name: String(option.supplier_name || ""),
     price: String(option.price || ""),
@@ -183,9 +187,35 @@ function normalizePartTypeOption(option: Partial<NonNullable<GeminiMirrorResearc
   };
 }
 
+function normalizeCondition(condition: unknown) {
+  return condition === "New" ||
+    condition === "Used" ||
+    condition === "Remanufactured" ||
+    condition === "Refurbished" ||
+    condition === "Unknown"
+    ? condition
+    : "Unknown";
+}
+
+function totalOptionCost(option: { price: string; shipping_cost: number }) {
+  const price = Number(String(option.price || "").replace(/,/g, "").match(/\d+(?:\.\d+)?/)?.[0] || 0);
+  const shipping = Number.isFinite(Number(option.shipping_cost)) ? Number(option.shipping_cost) : 0;
+  return price + shipping;
+}
+
 function finalizeResearchLinks(research: GeminiMirrorResearch): GeminiMirrorResearch {
-  const recommendedOption = research.supplier_options.find((option) => option.product_link === research.recommended_product_link) ||
-    research.supplier_options[0] ||
+  const sortedOptions = [...research.supplier_options].sort((a, b) => totalOptionCost(a) - totalOptionCost(b));
+  const cheapest = sortedOptions[0];
+  const supplierOptions = research.supplier_options.map((option) => {
+    const optionLabels = new Set(option.option_labels);
+    if (cheapest && option.product_link === cheapest.product_link) {
+      optionLabels.add("cheapest");
+    }
+
+    return { ...option, option_labels: Array.from(optionLabels) as Array<"cheapest" | "fastest"> };
+  });
+
+  const recommendedOption = cheapest ||
     research.oem_option ||
     research.aftermarket_option;
 
@@ -203,6 +233,7 @@ function finalizeResearchLinks(research: GeminiMirrorResearch): GeminiMirrorRese
 
   return {
     ...research,
+    supplier_options: supplierOptions,
     recommended_supplier_name: recommendedOption.supplier_name,
     recommended_price: recommendedOption.price,
     recommended_product_link: recommendedOption.product_link,
@@ -238,9 +269,10 @@ function parseJsonObject(text: string): GeminiMirrorResearch {
       recommended_product_link: String(parsed.recommended_product_link || ""),
       recommended_estimated_shipping: String(parsed.recommended_estimated_shipping || ""),
       supplier_options: Array.isArray(parsed.supplier_options)
-        ? parsed.supplier_options.slice(0, 3).map((option) => ({
+        ? parsed.supplier_options.slice(0, 5).map((option) => ({
             part_number: String(option.part_number || parsed.likely_part_number || ""),
             part_type: option.part_type === "OEM" || option.part_type === "Aftermarket" ? option.part_type : undefined,
+            condition: normalizeCondition(option.condition),
             supplier_name: String(option.supplier_name || ""),
             price: String(option.price || ""),
             shipping_cost: Number.isFinite(Number(option.shipping_cost)) ? Number(option.shipping_cost) : 0,
@@ -289,7 +321,7 @@ function buildPrompt(submission: MirrorSubmission) {
 
   return `
 Find the correct replacement side mirror assembly using Google Search grounding.
-Prioritize an exact fit and current purchasable listings.
+Prioritize the lowest real total part cost without sacrificing exact fit.
 
 Vehicle:
 - VIN: ${hasVin ? submission.vin : "not provided"}
@@ -306,13 +338,16 @@ Rules:
 - Use VIN first when provided; use manual fields only when VIN is missing or insufficient.
 - Return only schema-valid JSON.
 - For confidence, match vehicle, trim/body, side, connector/features, color/paint status, and fitment years.
-- Return up to three shipped supplier options with current price, numeric shipping_cost, delivery timeframe, tracking availability, part_type when known, and direct product URL.
-- Return oem_option and aftermarket_option when both exist. Use null for a type that is unavailable and explain why in research_summary.
-- Mark the cheapest delivered option with "cheapest" and the soonest delivery with "fastest".
+- If VIN plus the selected side/features identifies likely fitment, return the best purchasable options and put any remaining connector/paint verification caveat in research_summary. Do not set confident_match false only because a final installer should verify wiring pin count or paint code.
+- Return up to five shipped supplier options with current price, numeric shipping_cost, delivery timeframe, tracking availability, part_type, condition, and direct product URL.
+- Actively search eBay Motors / eBay direct item pages, especially used OEM mirrors, because low-cost used exact-fit mirrors can be the best option. Include eBay only when the listing is a direct item page for the exact side/features/fitment and shows current price and shipping.
+- Include at least one low-cost used/OEM marketplace option when a confident exact-fit eBay or used part listing exists.
+- Return oem_option and aftermarket_option when both exist. OEM may be new, used, or refurbished; use condition to say which. Use null for a type that is unavailable and explain why in research_summary.
+- Mark the cheapest delivered option (price + shipping_cost) with "cheapest" and the soonest delivery with "fastest", even if the cheapest option is used/eBay.
 - Include local pickup options only when a real direct inventory/product URL exists near Lakewood, NJ.
 - Return places_to_call with the closest 2-3 relevant major auto-parts chains within 15 miles of 364 Ridge Ave, Lakewood, NJ 08701 that are worth calling about this part. Use only LKQ, AutoZone, O'Reilly Auto Parts, Advance Auto Parts, and NAPA. Include store name, phone number, distance, and a short reason_to_call. Skip small independent shops and salvage yards.
-- Set confident_match false when exact fitment is uncertain, the needed mirror features are ambiguous, or no direct product URL is confirmed.
-- Every product_link/recommended_product_link must be a direct retailer product page where the part can be purchased. Do not return image URLs, CDN URLs, illustration/asset URLs, PDF links, static files, or media resources.
+- Set confident_match false only when vehicle/body/side fitment is genuinely uncertain, the customer did not provide enough feature information to choose a mirror, or no direct product URL is confirmed.
+- Every product_link/recommended_product_link must be a direct retailer or marketplace item page where the exact part can be purchased. Do not return image URLs, CDN URLs, illustration/asset URLs, PDF links, static files, or media resources.
 - Do not return catalog pages, search result pages, category pages, browse pages, or generic mirror listing pages. The URL must identify the specific purchasable part.
 - If search finds only an image/CDN/asset URL for an option, find the actual product page URL instead; if you cannot confirm the product page URL, exclude that option.
 - Do not invent part numbers, prices, suppliers, links, shipping timeframes, or tracking availability.

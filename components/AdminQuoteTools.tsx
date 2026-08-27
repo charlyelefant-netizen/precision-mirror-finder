@@ -8,6 +8,7 @@ type QuoteOption = {
   id: string;
   category: "shipped" | "local";
   part_type?: "OEM" | "Aftermarket";
+  condition?: "New" | "Used" | "Remanufactured" | "Refurbished" | "Unknown";
   part_number: string;
   supplier_name: string;
   price: string;
@@ -63,6 +64,7 @@ function normalizeShippedOption(option: SupplierOption): QuoteOption {
     id: `shipped:${option.supplier_name}:${option.product_link}`,
     category: "shipped",
     part_type: option.part_type,
+    condition: option.condition || "Unknown",
     part_number: option.part_number,
     supplier_name: option.supplier_name,
     price: option.price,
@@ -79,6 +81,7 @@ function normalizePartTypeOption(option: PartTypeOption): QuoteOption {
     id: `part-type:${option.part_type}:${option.supplier_name}:${option.product_link}`,
     category: "shipped",
     part_type: option.part_type,
+    condition: option.condition || "Unknown",
     part_number: option.part_number,
     supplier_name: option.supplier_name,
     price: option.price,
@@ -175,7 +178,11 @@ function OptionCard({
       <div className="mb-2 flex items-start justify-between gap-3">
         <div>
           <p className="font-bold">{option.part_type ? `${option.part_type} option` : option.supplier_name}</p>
-          {option.part_type ? <p className="text-sm font-semibold text-muted">{option.supplier_name}</p> : null}
+          {option.part_type ? (
+            <p className="text-sm font-semibold text-muted">
+              {option.supplier_name}{option.condition && option.condition !== "Unknown" ? ` • ${option.condition}` : ""}
+            </p>
+          ) : null}
           {option.badges.length ? (
             <div className="mt-1 flex flex-wrap gap-1">
               {option.badges.map((badge) => <Badge key={badge}>{badge}</Badge>)}

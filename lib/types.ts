@@ -35,6 +35,7 @@ export type SubmissionRow = Omit<MirrorSubmission, "created_at" | "features"> & 
 
 export type SupplierOption = {
   part_type?: "OEM" | "Aftermarket";
+  condition?: "New" | "Used" | "Remanufactured" | "Refurbished" | "Unknown";
   part_number: string;
   supplier_name: string;
   price: string;
@@ -48,6 +49,7 @@ export type SupplierOption = {
 
 export type PartTypeOption = Omit<SupplierOption, "option_labels"> & {
   part_type: "OEM" | "Aftermarket";
+  condition?: "New" | "Used" | "Remanufactured" | "Refurbished" | "Unknown";
   note: string;
 };
 
