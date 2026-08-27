@@ -1,27 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
-import { claimNextResearchJob, completeResearchJob, failResearchJob } from "@/lib/db";
+import { hasAdminSession } from "@/lib/auth";
+import { claimNextResearchJob, claimResearchJobForSubmission, completeResearchJob, failResearchJob } from "@/lib/db";
 import { runResearchForSubmission } from "@/lib/research-job";
+import { isValidResearchToken } from "@/lib/research-token";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-function isAuthorized(request: NextRequest) {
+async function getAuthorizedSubmissionId(request: NextRequest) {
   const secret = process.env.CRON_SECRET?.trim();
+  const jobId = Number(request.nextUrl.searchParams.get("job") || "");
+  const token = request.nextUrl.searchParams.get("token") || "";
 
-  if (!secret) {
-    return process.env.NODE_ENV !== "production";
+  if (Number.isInteger(jobId) && jobId > 0 && isValidResearchToken(jobId, token)) {
+    return jobId;
   }
 
-  return request.headers.get("authorization") === `Bearer ${secret}`;
+  if (secret && request.headers.get("authorization") === `Bearer ${secret}`) {
+    return null;
+  }
+
+  if (await hasAdminSession()) {
+    return null;
+  }
+
+  if (!secret && process.env.NODE_ENV !== "production") {
+    return null;
+  }
+
+  return false;
 }
 
 async function processResearchJob(request: NextRequest) {
-  if (!isAuthorized(request)) {
+  const authorizedSubmissionId = await getAuthorizedSubmissionId(request);
+
+  if (authorizedSubmissionId === false) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const job = await claimNextResearchJob();
+  const job = authorizedSubmissionId
+    ? await claimResearchJobForSubmission(authorizedSubmissionId)
+    : await claimNextResearchJob();
 
   if (!job) {
     return NextResponse.json({ processed: false, reason: "No queued research jobs." });

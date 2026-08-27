@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { clearAdminSession, isValidPassword, setAdminSession } from "@/lib/auth";
 import { createSubmission, deleteSubmission, enqueueResearchJob, updateSubmission } from "@/lib/db";
+import { createResearchToken } from "@/lib/research-token";
 import { STATUSES, type SubmissionStatus } from "@/lib/types";
 
 function requiredString(formData: FormData, key: string) {
@@ -60,7 +61,7 @@ export async function submitMirrorRequest(formData: FormData) {
   await enqueueResearchJob(id);
 
   revalidatePath("/admin");
-  redirect("/?submitted=1");
+  redirect(`/?submitted=1&job=${id}&token=${createResearchToken(id)}`);
 }
 
 export async function loginAdmin(formData: FormData) {

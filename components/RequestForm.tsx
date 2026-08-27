@@ -1,5 +1,6 @@
 import { CheckCircle2 } from "lucide-react";
 import { submitMirrorRequest } from "@/app/actions";
+import { ResearchQueueKicker } from "@/components/ResearchQueueKicker";
 import { SubmitRequestButton } from "@/components/SubmitRequestButton";
 
 const years = Array.from({ length: 31 }, (_, index) => String(new Date().getFullYear() + 1 - index));
@@ -7,9 +8,11 @@ const makes = ["Toyota", "Honda", "Ford", "Chevrolet", "Nissan", "Hyundai", "Kia
 const features = ["Power adjust", "Heated glass", "Blind spot alert", "Turn signal", "Puddle light", "Memory", "Power fold", "Camera"];
 const colors = ["Black", "White", "Silver", "Gray", "Blue", "Red", "Unpainted", "Other"];
 
-export function RequestForm({ submitted }: { submitted: boolean }) {
+export function RequestForm({ submitted, jobId, token }: { submitted: boolean; jobId?: string; token?: string }) {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+      {submitted && jobId && token ? <ResearchQueueKicker jobId={jobId} token={token} /> : null}
+
       <div className="mb-6">
         <p className="mb-2 text-xs font-bold uppercase tracking-wide text-brand">Exact-fit sourcing</p>
         <h1 className="text-3xl font-bold tracking-tight text-ink sm:text-4xl">Get your replacement mirror quote</h1>

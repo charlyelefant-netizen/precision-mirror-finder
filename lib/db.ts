@@ -477,6 +477,54 @@ export async function claimNextResearchJob(): Promise<ResearchJob | null> {
   return { ...job, attempts: job.attempts + 1 };
 }
 
+export async function claimResearchJobForSubmission(submissionId: number): Promise<ResearchJob | null> {
+  await migrateDatabase();
+
+  if (isPostgres()) {
+    const result = await queryPostgres(
+      `
+      UPDATE research_jobs
+      SET status = 'processing',
+          attempts = attempts + 1,
+          updated_at = NOW()
+      WHERE submission_id = $1
+        AND (
+          status = 'queued'
+          OR (status = 'processing' AND updated_at < NOW() - INTERVAL '10 minutes')
+          OR (status = 'failed' AND attempts < 3)
+        )
+      RETURNING id, submission_id, attempts
+    `,
+      [submissionId]
+    );
+
+    return result.rows[0] ? (result.rows[0] as ResearchJob) : null;
+  }
+
+  const database = getSqliteDb();
+  const job = database
+    .prepare(`
+      SELECT id, submission_id, attempts
+      FROM research_jobs
+      WHERE submission_id = ?
+        AND (
+          status = 'queued'
+          OR status = 'processing'
+          OR (status = 'failed' AND attempts < 3)
+        )
+      LIMIT 1
+    `)
+    .get(submissionId) as ResearchJob | undefined;
+
+  if (!job) return null;
+
+  database
+    .prepare("UPDATE research_jobs SET status = 'processing', attempts = attempts + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+    .run(job.id);
+
+  return { ...job, attempts: job.attempts + 1 };
+}
+
 export async function completeResearchJob(id: number) {
   await migrateDatabase();
 

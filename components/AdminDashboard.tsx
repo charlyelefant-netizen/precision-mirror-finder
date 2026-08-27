@@ -6,6 +6,7 @@ import { logoutAdmin, updateAdminSubmission } from "@/app/actions";
 import { AdminCallSheet } from "@/components/AdminCallSheet";
 import { AdminQuoteTools } from "@/components/AdminQuoteTools";
 import { DeleteRequestButton } from "@/components/DeleteRequestButton";
+import { ResearchQueueKicker } from "@/components/ResearchQueueKicker";
 import { StatusTrackingFields } from "@/components/StatusTrackingFields";
 import { STATUSES, type MirrorSubmission, type SubmissionStatus } from "@/lib/types";
 
@@ -44,6 +45,7 @@ function isResearchInProgress(submission: MirrorSubmission) {
 export function AdminDashboard({ submissions, taxRate }: { submissions: MirrorSubmission[]; taxRate: number }) {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [sortOrder, setSortOrder] = useState<SortOrder>("newest");
+  const hasQueuedResearch = submissions.some(isResearchInProgress);
 
   const visibleSubmissions = useMemo(() => {
     return submissions
@@ -57,6 +59,8 @@ export function AdminDashboard({ submissions, taxRate }: { submissions: MirrorSu
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      {hasQueuedResearch ? <ResearchQueueKicker /> : null}
+
       <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="mb-2 text-xs font-bold uppercase tracking-wide text-brand">Operations</p>

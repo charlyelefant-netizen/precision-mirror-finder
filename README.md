@@ -47,13 +47,15 @@ node scripts/migrate-database.mjs --postgres
 
 ## Background Research Queue
 
-Customer submissions enqueue a research job and redirect immediately. Vercel Cron calls `/api/research/process` once per minute to run Gemini research in a separate worker function with a longer timeout.
+Customer submissions enqueue a research job and redirect immediately. The confirmation page calls `/api/research/process` with a signed one-job token, so Gemini research runs in a separate worker request with a longer timeout instead of inside the customer form submission. The admin dashboard also kicks the worker when queued research is visible.
 
-In production, protect that endpoint with:
+For manual or scheduled worker calls, protect that endpoint with:
 
 ```bash
 CRON_SECRET=<a long random string>
 ```
+
+On Vercel Hobby, frequent cron schedules are not available. If the project is upgraded later, a cron can be added to call `/api/research/process` as an extra retry path.
 
 ## Go Live Checklist
 
