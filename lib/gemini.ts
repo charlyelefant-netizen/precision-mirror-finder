@@ -408,6 +408,7 @@ function buildPrompt(submission: MirrorSubmission) {
   return `
 Find the correct replacement side mirror assembly using Google Search grounding.
 Prioritize the lowest real total part cost without sacrificing exact fit.
+If VIN is provided, the Year/Make/Model/Trim values below were decoded before this request using the NHTSA VIN decoder. Treat those decoded values as authoritative and do not override them with a different make or model.
 
 Vehicle:
 - VIN: ${hasVin ? submission.vin : "not provided"}
@@ -421,7 +422,7 @@ Vehicle:
 - Ship-to / local search location: 364 Ridge Ave, Lakewood, NJ 08701
 
 Rules:
-- Use VIN first when provided.
+- Use decoded VIN details first when provided. Do not identify the vehicle as any make/model that conflicts with the decoded Year/Make/Model/Trim fields.
 - Return only schema-valid JSON.
 - When VIN is missing, infer mirror features from year/make/model/trim using reliable fitment or OEM catalog pages. If multiple incompatible mirror packages remain likely, set confident_match false and explain briefly.
 - Match vehicle/body, side, trim/features, color or paint status, connector notes, and fitment years.

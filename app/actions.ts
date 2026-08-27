@@ -6,6 +6,7 @@ import { clearAdminSession, isValidPassword, setAdminSession } from "@/lib/auth"
 import { createSubmission, deleteSubmission, enqueueResearchJob, updateSubmission } from "@/lib/db";
 import { createResearchToken } from "@/lib/research-token";
 import { STATUSES, type SubmissionStatus } from "@/lib/types";
+import { decodeVin, decodedTrimLabel, normalizeVin } from "@/lib/vin-decoder";
 
 function requiredString(formData: FormData, key: string) {
   const value = String(formData.get(key) || "").trim();
@@ -20,15 +21,28 @@ function optionalString(formData: FormData, key: string) {
 }
 
 export async function submitMirrorRequest(formData: FormData) {
-  const vin = optionalString(formData, "vin").toUpperCase();
-  const year = optionalString(formData, "year");
-  const make = optionalString(formData, "make");
-  const model = optionalString(formData, "model");
-  const trim = optionalString(formData, "trim");
+  const vin = normalizeVin(optionalString(formData, "vin"));
+  let year = optionalString(formData, "year");
+  let make = optionalString(formData, "make");
+  let model = optionalString(formData, "model");
+  let trim = optionalString(formData, "trim");
   const hasManualDetails = Boolean(year && make && model);
 
   if (!vin && !hasManualDetails) {
     redirect("/?error=vehicle");
+  }
+
+  if (vin) {
+    const decoded = await decodeVin(vin);
+
+    if (!decoded) {
+      redirect("/?error=vin");
+    }
+
+    year = decoded.year;
+    make = decoded.make;
+    model = decoded.model;
+    trim = decodedTrimLabel(decoded) || decoded.trim;
   }
 
   const id = await createSubmission({

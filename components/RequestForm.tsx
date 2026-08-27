@@ -34,6 +34,12 @@ export function RequestForm({ submitted, jobId, token, error }: { submitted: boo
         </div>
       ) : null}
 
+      {error === "vin" ? (
+        <div className="mb-5 rounded-md border border-red-200 bg-red-50 p-4 text-sm font-semibold text-danger">
+          We could not verify that VIN. Please check the 17 characters or use the manual vehicle details section.
+        </div>
+      ) : null}
+
       <form action={submitMirrorRequest} className="space-y-8 rounded-lg border border-line bg-panel p-4 shadow-soft sm:p-6">
         <section className="space-y-4">
           <h2 className="section-title">Vehicle Identification</h2>
