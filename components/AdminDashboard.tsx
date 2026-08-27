@@ -7,7 +7,6 @@ import { AdminCallSheet } from "@/components/AdminCallSheet";
 import { AdminQuoteTools } from "@/components/AdminQuoteTools";
 import { DeleteRequestButton } from "@/components/DeleteRequestButton";
 import { ResearchQueueKicker } from "@/components/ResearchQueueKicker";
-import { RunResearchButton } from "@/components/RunResearchButton";
 import { StatusTrackingFields } from "@/components/StatusTrackingFields";
 import { STATUSES, type MirrorSubmission, type SubmissionStatus } from "@/lib/types";
 
@@ -136,13 +135,10 @@ export function AdminDashboard({ submissions, taxRate }: { submissions: MirrorSu
                   </p>
                   {submission.vin ? <p className="text-sm font-semibold text-muted">VIN: {submission.vin}</p> : null}
                   {isResearchInProgress(submission) ? (
-                    <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 p-3">
-                      <p className="flex items-center gap-2 text-sm font-semibold text-warning">
-                        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                        AI research is in progress. This card will update automatically when saved.
-                      </p>
-                      <RunResearchButton id={submission.id} />
-                    </div>
+                    <p className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-warning">
+                      <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                      AI research is in progress. This card will update automatically when saved.
+                    </p>
                   ) : null}
                   <div className="flex flex-wrap gap-2">
                     {(submission.features.length ? submission.features : ["No feature selections"]).map((feature) => (
