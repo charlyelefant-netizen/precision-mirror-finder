@@ -408,7 +408,8 @@ export function AdminQuoteTools({
       setSupplierName(parsedSupplier || supplierName);
       applyReceiptNumbers(parsedPartCost, parsedShippingCost, parsedSalesTax);
       setReceiptUploadState("done");
-      setReceiptUploadMessage(parsed.confidence === "low" ? `Check these numbers: ${parsed.notes || "low confidence parse"}` : "Receipt read. Review the numbers, then save.");
+      const recognizedSupplier = parsedSupplier ? ` as ${parsedSupplier}` : "";
+      setReceiptUploadMessage(parsed.confidence === "low" ? `Check these numbers: ${parsed.notes || "low confidence parse"}` : `Receipt read${recognizedSupplier}. Review the numbers, then save.`);
     } catch (error) {
       setReceiptUploadState("error");
       setReceiptUploadMessage(error instanceof Error ? error.message : "Receipt could not be read.");
