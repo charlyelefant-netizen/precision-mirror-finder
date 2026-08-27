@@ -32,8 +32,18 @@ function parseResearch(submission: MirrorSubmission) {
 }
 
 function majorFeatures(features: string[]) {
-  const wanted = ["Heated glass", "Blind spot alert", "Turn signal", "Memory"];
-  return wanted.filter((feature) => features.includes(feature));
+  const normalized = features.map((feature) => feature.toLowerCase());
+  const labels = [
+    { label: "Heated", patterns: ["heated"] },
+    { label: "Blind spot", patterns: ["blind spot"] },
+    { label: "Turn signal", patterns: ["turn signal"] },
+    { label: "Memory", patterns: ["memory"] },
+    { label: "Power adjustment", patterns: ["power"] }
+  ];
+
+  return labels
+    .filter(({ patterns }) => patterns.some((pattern) => normalized.some((feature) => feature.includes(pattern))))
+    .map(({ label }) => label);
 }
 
 function phoneHref(phone: string) {
