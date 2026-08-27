@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #f6f8fe;
+  color: #101c2d;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+@layer components {
+  .field-label {
+    @apply text-xs font-bold uppercase tracking-wide text-muted;
+  }
+
+  .field-input {
+    @apply h-11 w-full rounded-md border border-line bg-field px-3 text-sm text-ink outline-none transition focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/15;
+  }
+
+  .field-textarea {
+    @apply min-h-28 w-full rounded-md border border-line bg-field px-3 py-2 text-sm text-ink outline-none transition focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand/15;
+  }
+
+  .section-title {
+    @apply border-b border-line pb-2 text-lg font-semibold text-ink;
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "Precision Mirror Finder",
+  "short_name": "Mirror Finder",
+  "description": "Request and manage exact vehicle mirror replacement quotes.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f9fc",
+  "theme_color": "#0f4c81",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
