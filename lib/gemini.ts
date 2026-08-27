@@ -187,7 +187,7 @@ function normalizePartTypeOption(option: Partial<NonNullable<GeminiMirrorResearc
   };
 }
 
-function normalizeCondition(condition: unknown) {
+function normalizeCondition(condition: unknown): "New" | "Used" | "Remanufactured" | "Refurbished" | "Unknown" {
   return condition === "New" ||
     condition === "Used" ||
     condition === "Remanufactured" ||
