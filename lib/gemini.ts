@@ -1,10 +1,10 @@
 import type { GeminiMirrorResearch, MirrorSubmission } from "@/lib/types";
 
-const PRIMARY_GEMINI_MODEL = "gemini-3.7-flash";
-const FALLBACK_GEMINI_MODEL = "gemini-3.5-flash-lite";
-const PRIMARY_MAX_ATTEMPTS = 5;
-const INITIAL_RETRY_DELAY_MS = 1000;
-const REQUEST_TIMEOUT_MS = 45_000;
+const PRIMARY_GEMINI_MODEL = "gemini-3.5-flash-lite";
+const FALLBACK_GEMINI_MODEL = "gemini-3.7-flash";
+const PRIMARY_MAX_ATTEMPTS = 4;
+const INITIAL_RETRY_DELAY_MS = 750;
+const REQUEST_TIMEOUT_MS = 18_000;
 
 const researchSchema = {
   type: "object",
@@ -336,23 +336,18 @@ Vehicle:
 
 Rules:
 - Use VIN first when provided.
-- When VIN is missing, research the exact year/make/model/trim combination and infer factory mirror equipment from reliable fitment, OEM catalog, window-sticker/trim-spec, retailer fitment, and parts-diagram sources.
-- Do not depend on the customer to know features like heated glass, blind spot, turn signal, memory, puddle light, power fold, camera, connector count, or paint cap. Infer those from trim/body/options when possible.
-- If trim is "I'm not sure" or missing, use the year/make/model/side/color to find the most likely mirror families, but set confident_match false if multiple incompatible mirror feature packages are common and cannot be narrowed down.
 - Return only schema-valid JSON.
-- For confidence, match vehicle, trim/body, side, connector/features, color/paint status, and fitment years.
-- If VIN or manual year/make/model/trim identifies likely fitment, return the best purchasable options and put any remaining connector/paint verification caveat in research_summary. Do not set confident_match false only because a final installer should verify wiring pin count or paint code.
-- Return up to five shipped supplier options with current price, numeric shipping_cost, delivery timeframe, tracking availability, part_type, condition, and direct product URL.
-- Actively search eBay Motors / eBay direct item pages, especially used OEM mirrors, because low-cost used exact-fit mirrors can be the best option. Include eBay only when the listing is a direct item page for the exact side/features/fitment and shows current price and shipping.
-- Include at least one low-cost used/OEM marketplace option when a confident exact-fit eBay or used part listing exists.
-- Return oem_option and aftermarket_option when both exist. OEM may be new, used, or refurbished; use condition to say which. Use null for a type that is unavailable and explain why in research_summary.
+- When VIN is missing, infer mirror features from year/make/model/trim using reliable fitment or OEM catalog pages. If multiple incompatible mirror packages remain likely, set confident_match false and explain briefly.
+- Match vehicle/body, side, trim/features, color or paint status, connector notes, and fitment years.
+- Return up to four shipped supplier options with current price, numeric shipping_cost to 364 Ridge Ave, Lakewood, NJ 08701, delivery timeframe, tracking availability, part_type, condition, and direct product URL.
+- Search eBay Motors/direct eBay item pages for low-cost used OEM mirrors. Include eBay only when the direct item page appears to match exact side/features/fitment and shows price plus shipping.
+- Return oem_option and aftermarket_option when both exist. OEM may be new, used, refurbished, or remanufactured. Use null for unavailable types and explain in research_summary.
 - Mark the cheapest delivered option (price + shipping_cost) with "cheapest" and the soonest delivery with "fastest", even if the cheapest option is used/eBay.
 - Include local pickup options only when a real direct inventory/product URL exists near Lakewood, NJ.
-- Return places_to_call with the closest 2-3 relevant major auto-parts chains within 15 miles of 364 Ridge Ave, Lakewood, NJ 08701 that are worth calling about this part. Use only LKQ, AutoZone, O'Reilly Auto Parts, Advance Auto Parts, and NAPA. Include store name, phone number, distance, and a short reason_to_call. Skip small independent shops and salvage yards.
-- Set confident_match false only when vehicle/body/side fitment is genuinely uncertain, the customer did not provide enough feature information to choose a mirror, or no direct product URL is confirmed.
+- Return places_to_call with the closest 2-3 relevant major chains within 15 miles: LKQ, AutoZone, O'Reilly Auto Parts, Advance Auto Parts, or NAPA. Include store name, phone number, distance, and reason_to_call.
+- Set confident_match false only when exact fitment is genuinely uncertain or no direct purchasable product URL is confirmed.
 - Every product_link/recommended_product_link must be a direct retailer or marketplace item page where the exact part can be purchased. Do not return image URLs, CDN URLs, illustration/asset URLs, PDF links, static files, or media resources.
-- Do not return catalog pages, search result pages, category pages, browse pages, or generic mirror listing pages. The URL must identify the specific purchasable part.
-- If search finds only an image/CDN/asset URL for an option, find the actual product page URL instead; if you cannot confirm the product page URL, exclude that option.
+- Do not return catalog, search result, category, browse, or generic mirror listing pages. The URL must identify the specific purchasable part.
 - Do not invent part numbers, prices, suppliers, links, shipping timeframes, or tracking availability.
 `.trim();
 }

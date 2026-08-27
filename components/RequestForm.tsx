@@ -6,7 +6,7 @@ import { SubmitRequestButton } from "@/components/SubmitRequestButton";
 
 const colors = ["Black", "White", "Silver", "Gray", "Blue", "Red", "Unpainted", "Other"];
 
-export function RequestForm({ submitted, jobId, token }: { submitted: boolean; jobId?: string; token?: string }) {
+export function RequestForm({ submitted, jobId, token, error }: { submitted: boolean; jobId?: string; token?: string; error?: string }) {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
       {submitted && jobId && token ? <ResearchQueueKicker jobId={jobId} token={token} /> : null}
@@ -25,6 +25,12 @@ export function RequestForm({ submitted, jobId, token }: { submitted: boolean; j
           <div>
             <p className="font-semibold">Request received! We&apos;re finding your exact part and will reach out with a quote as soon as possible.</p>
           </div>
+        </div>
+      ) : null}
+
+      {error === "vehicle" ? (
+        <div className="mb-5 rounded-md border border-red-200 bg-red-50 p-4 text-sm font-semibold text-danger">
+          Enter your VIN, or open the manual section and select the year, make, and model.
         </div>
       ) : null}
 
