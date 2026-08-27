@@ -203,13 +203,31 @@ function totalOptionCost(option: { price: string; shipping_cost: number }) {
   return price + shipping;
 }
 
+function earliestDeliveryDays(value: string) {
+  const normalized = value.toLowerCase();
+
+  if (/same[-\s]?day|today|pickup/.test(normalized)) return 0;
+  if (/next[-\s]?day|tomorrow|overnight/.test(normalized)) return 1;
+
+  const numbers = normalized.match(/\d+(?:\.\d+)?/g)?.map(Number).filter(Number.isFinite) || [];
+  return numbers.length ? Math.min(...numbers) : Number.POSITIVE_INFINITY;
+}
+
 function finalizeResearchLinks(research: GeminiMirrorResearch): GeminiMirrorResearch {
   const sortedOptions = [...research.supplier_options].sort((a, b) => totalOptionCost(a) - totalOptionCost(b));
   const cheapest = sortedOptions[0];
+  const fastest = [...research.supplier_options].sort(
+    (a, b) => earliestDeliveryDays(a.estimated_shipping || a.availability) - earliestDeliveryDays(b.estimated_shipping || b.availability)
+  )[0];
   const supplierOptions = research.supplier_options.map((option) => {
-    const optionLabels = new Set(option.option_labels);
+    const optionLabels = new Set<"cheapest" | "fastest">(
+      option.option_labels.filter((label) => label !== "cheapest" && label !== "fastest")
+    );
     if (cheapest && option.product_link === cheapest.product_link) {
       optionLabels.add("cheapest");
+    }
+    if (fastest && option.product_link === fastest.product_link) {
+      optionLabels.add("fastest");
     }
 
     return { ...option, option_labels: Array.from(optionLabels) as Array<"cheapest" | "fastest"> };

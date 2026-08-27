@@ -46,6 +46,36 @@ function calculateQuoteTotals(price: string, shipping: number, taxRate: number, 
   };
 }
 
+function earliestDeliveryDays(value: string) {
+  const normalized = value.toLowerCase();
+
+  if (/same[-\s]?day|today|pickup/.test(normalized)) return 0;
+  if (/next[-\s]?day|tomorrow|overnight/.test(normalized)) return 1;
+
+  const numbers = normalized.match(/\d+(?:\.\d+)?/g)?.map(Number).filter(Number.isFinite) || [];
+  return numbers.length ? Math.min(...numbers) : Number.POSITIVE_INFINITY;
+}
+
+function deliveredCost(option: QuoteOption) {
+  return parsePrice(option.price) + option.shipping_cost;
+}
+
+function withDerivedBadges(options: QuoteOption[]) {
+  const cheapest = [...options].sort((a, b) => deliveredCost(a) - deliveredCost(b))[0];
+  const fastest = [...options].sort(
+    (a, b) => earliestDeliveryDays(a.estimated_shipping || a.detail) - earliestDeliveryDays(b.estimated_shipping || b.detail)
+  )[0];
+
+  return options.map((option) => {
+    const badges = new Set<QuoteOption["badges"][number]>(
+      option.badges.filter((badge) => badge !== "cheapest" && badge !== "fastest")
+    );
+    if (cheapest?.id === option.id) badges.add("cheapest");
+    if (fastest?.id === option.id) badges.add("fastest");
+    return { ...option, badges: Array.from(badges) as QuoteOption["badges"] };
+  });
+}
+
 function isProductPageUrl(value: string) {
   try {
     const url = new URL(value);
@@ -167,7 +197,7 @@ function parseResearchOptions(submission: MirrorSubmission) {
       : shippedOptions.find((option) => option.part_type === "Aftermarket");
 
     return {
-      shippedOptions,
+      shippedOptions: withDerivedBadges(shippedOptions),
       oemOption: oemOption && isProductPageUrl(oemOption.product_link) ? oemOption : undefined,
       aftermarketOption: aftermarketOption && isProductPageUrl(aftermarketOption.product_link) ? aftermarketOption : undefined,
       localOptions: Array.isArray(parsed.local_pickup_options)
