@@ -137,7 +137,7 @@ export function ManualVehicleFields() {
       </div>
 
       <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm leading-6 text-brand">
-        We&apos;ll identify the mirror features from the vehicle details during research. Choose “I&apos;m not sure” for trim if needed.
+        We&apos;ll identify the mirror features from the vehicle details during research. Choose &quot;I&apos;m not sure&quot; for trim if needed.
       </div>
     </section>
   );
