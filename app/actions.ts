@@ -25,10 +25,10 @@ export async function submitMirrorRequest(formData: FormData) {
   const make = optionalString(formData, "make");
   const model = optionalString(formData, "model");
   const trim = optionalString(formData, "trim");
-  const hasManualDetails = Boolean(year && make && model && trim);
+  const hasManualDetails = Boolean(year && make && model);
 
   if (!vin && !hasManualDetails) {
-    throw new Error("Enter a VIN or complete the manual vehicle details.");
+    throw new Error("Enter a VIN or select the year, make, and model manually.");
   }
 
   const id = await createSubmission({

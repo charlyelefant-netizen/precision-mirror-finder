@@ -1,11 +1,9 @@
 import { CheckCircle2 } from "lucide-react";
 import { submitMirrorRequest } from "@/app/actions";
+import { ManualVehicleFields } from "@/components/ManualVehicleFields";
 import { ResearchQueueKicker } from "@/components/ResearchQueueKicker";
 import { SubmitRequestButton } from "@/components/SubmitRequestButton";
 
-const years = Array.from({ length: 31 }, (_, index) => String(new Date().getFullYear() + 1 - index));
-const makes = ["Toyota", "Honda", "Ford", "Chevrolet", "Nissan", "Hyundai", "Kia", "Subaru", "BMW", "Mercedes-Benz", "Audi", "Lexus", "Other"];
-const features = ["Power adjust", "Heated glass", "Blind spot alert", "Turn signal", "Puddle light", "Memory", "Power fold", "Camera"];
 const colors = ["Black", "White", "Silver", "Gray", "Blue", "Red", "Unpainted", "Other"];
 
 export function RequestForm({ submitted, jobId, token }: { submitted: boolean; jobId?: string; token?: string }) {
@@ -71,43 +69,7 @@ export function RequestForm({ submitted, jobId, token }: { submitted: boolean; j
 
         <details className="rounded-md border border-line bg-field p-4">
           <summary className="cursor-pointer text-sm font-bold text-brand">Don&apos;t have your VIN? Enter details manually</summary>
-          <section className="mt-4 space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <label className="space-y-2">
-                <span className="field-label">Year</span>
-                <select name="year" className="field-input bg-white">
-                  <option value="">Select year</option>
-                  {years.map((year) => <option key={year}>{year}</option>)}
-                </select>
-              </label>
-              <label className="space-y-2">
-                <span className="field-label">Make</span>
-                <select name="make" className="field-input bg-white">
-                  <option value="">Select make</option>
-                  {makes.map((make) => <option key={make}>{make}</option>)}
-                </select>
-              </label>
-              <label className="space-y-2">
-                <span className="field-label">Model</span>
-                <input name="model" className="field-input bg-white" placeholder="Camry, F-150, CR-V" />
-              </label>
-              <label className="space-y-2">
-                <span className="field-label">Trim</span>
-                <input name="trim" className="field-input bg-white" placeholder="EX-L, XLE, Limited" />
-              </label>
-            </div>
-            <fieldset className="space-y-3">
-              <legend className="field-label">Features</legend>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {features.map((feature) => (
-                  <label key={feature} className="flex min-h-11 items-center gap-3 rounded-md border border-line bg-white px-3 text-sm font-medium text-ink">
-                    <input name="features" value={feature} type="checkbox" className="size-4 accent-brand" />
-                    {feature}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          </section>
+          <ManualVehicleFields />
         </details>
 
         <section className="space-y-4">

@@ -331,14 +331,17 @@ Vehicle:
 - Trim: ${submission.trim || "not provided"}
 - Side: ${submission.side}
 - Color: ${submission.color}
-- Features: ${submission.features.length ? submission.features.join(", ") : "none specified"}
+- Customer-selected mirror features: ${submission.features.length ? submission.features.join(", ") : "not provided; infer from vehicle year/make/model/trim"}
 - Ship-to / local search location: 364 Ridge Ave, Lakewood, NJ 08701
 
 Rules:
-- Use VIN first when provided; use manual fields only when VIN is missing or insufficient.
+- Use VIN first when provided.
+- When VIN is missing, research the exact year/make/model/trim combination and infer factory mirror equipment from reliable fitment, OEM catalog, window-sticker/trim-spec, retailer fitment, and parts-diagram sources.
+- Do not depend on the customer to know features like heated glass, blind spot, turn signal, memory, puddle light, power fold, camera, connector count, or paint cap. Infer those from trim/body/options when possible.
+- If trim is "I'm not sure" or missing, use the year/make/model/side/color to find the most likely mirror families, but set confident_match false if multiple incompatible mirror feature packages are common and cannot be narrowed down.
 - Return only schema-valid JSON.
 - For confidence, match vehicle, trim/body, side, connector/features, color/paint status, and fitment years.
-- If VIN plus the selected side/features identifies likely fitment, return the best purchasable options and put any remaining connector/paint verification caveat in research_summary. Do not set confident_match false only because a final installer should verify wiring pin count or paint code.
+- If VIN or manual year/make/model/trim identifies likely fitment, return the best purchasable options and put any remaining connector/paint verification caveat in research_summary. Do not set confident_match false only because a final installer should verify wiring pin count or paint code.
 - Return up to five shipped supplier options with current price, numeric shipping_cost, delivery timeframe, tracking availability, part_type, condition, and direct product URL.
 - Actively search eBay Motors / eBay direct item pages, especially used OEM mirrors, because low-cost used exact-fit mirrors can be the best option. Include eBay only when the listing is a direct item page for the exact side/features/fitment and shows current price and shipping.
 - Include at least one low-cost used/OEM marketplace option when a confident exact-fit eBay or used part listing exists.
