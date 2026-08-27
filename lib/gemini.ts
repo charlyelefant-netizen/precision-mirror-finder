@@ -426,9 +426,10 @@ Rules:
 - Return only schema-valid JSON.
 - When VIN is missing, infer mirror features from year/make/model/trim using reliable fitment or OEM catalog pages. If multiple incompatible mirror packages remain likely, set confident_match false and explain briefly.
 - Match vehicle/body, side, trim/features, color or paint status, connector notes, and fitment years.
-- Return up to four shipped supplier options with current price, numeric shipping_cost to 364 Ridge Ave, Lakewood, NJ 08701, delivery timeframe, tracking availability, part_type, condition, and direct product URL.
+- Return 2-4 distinct shipped supplier options when available, not duplicate copies of the same listing. Choose options because they are cheapest delivered, fastest delivery, best OEM/original match, or best new aftermarket/generic value.
 - Search eBay Motors/direct eBay item pages for low-cost used OEM mirrors. Include eBay only when the direct item page appears to match exact side/features/fitment and shows price plus shipping.
-- Return oem_option and aftermarket_option when both exist. OEM may be new, used, refurbished, or remanufactured. Use null for unavailable types and explain in research_summary.
+- Return oem_option and aftermarket_option when both exist. OEM may be new, used, refurbished, or remanufactured. Aftermarket means generic/new replacement when available. Use null for unavailable types and explain in research_summary.
+- oem_option and aftermarket_option should identify the best representative choice of each type. If that same link is also in supplier_options, do not return another duplicate listing for it unless the supplier, price, condition, or delivery is meaningfully different.
 - Mark the cheapest delivered option (price + shipping_cost) with "cheapest" and the soonest delivery with "fastest", even if the cheapest option is used/eBay.
 - Include local pickup options only when a real direct inventory/product URL exists near Lakewood, NJ.
 - Return places_to_call with the closest 2-3 relevant major chains within 15 miles: LKQ, AutoZone, O'Reilly Auto Parts, Advance Auto Parts, or NAPA. Include store name, phone number, distance, and reason_to_call.

@@ -76,6 +76,23 @@ function withDerivedBadges(options: QuoteOption[]) {
   });
 }
 
+function optionIdentity(option: Pick<QuoteOption, "part_number" | "supplier_name" | "product_link" | "part_type">) {
+  return [option.part_type || "", option.part_number, option.supplier_name, option.product_link]
+    .map((value) => value.toLowerCase().trim())
+    .join("|");
+}
+
+function uniqueOptions(options: QuoteOption[]) {
+  const seen = new Set<string>();
+
+  return options.filter((option) => {
+    const key = optionIdentity(option);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function isProductPageUrl(value: string) {
   try {
     const url = new URL(value);
@@ -196,10 +213,15 @@ function parseResearchOptions(submission: MirrorSubmission) {
       ? normalizePartTypeOption(parsed.aftermarket_option)
       : shippedOptions.find((option) => option.part_type === "Aftermarket");
 
+    const partTypeOptions = [oemOption, aftermarketOption].filter(
+      (option): option is QuoteOption => Boolean(option && isProductPageUrl(option.product_link))
+    );
+    const partTypeKeys = new Set(partTypeOptions.map(optionIdentity));
+
     return {
-      shippedOptions: withDerivedBadges(shippedOptions),
-      oemOption: oemOption && isProductPageUrl(oemOption.product_link) ? oemOption : undefined,
-      aftermarketOption: aftermarketOption && isProductPageUrl(aftermarketOption.product_link) ? aftermarketOption : undefined,
+      shippedOptions: withDerivedBadges(uniqueOptions(shippedOptions)).filter((option) => !partTypeKeys.has(optionIdentity(option))),
+      oemOption: partTypeOptions.find((option) => option.part_type === "OEM"),
+      aftermarketOption: partTypeOptions.find((option) => option.part_type === "Aftermarket"),
       localOptions: Array.isArray(parsed.local_pickup_options)
         ? parsed.local_pickup_options.map(normalizeLocalOption).filter((option) => isProductPageUrl(option.product_link))
         : []
@@ -317,7 +339,7 @@ export function AdminQuoteTools({
   taxRate: number;
 }) {
   const { shippedOptions, oemOption, aftermarketOption, localOptions } = useMemo(() => parseResearchOptions(submission), [submission]);
-  const partTypeOptions = [oemOption, aftermarketOption].filter(Boolean) as QuoteOption[];
+  const partTypeOptions = withDerivedBadges([oemOption, aftermarketOption].filter(Boolean) as QuoteOption[]);
   const allOptions = [...partTypeOptions, ...localOptions, ...shippedOptions];
   const initialSupplierLink = isProductPageUrl(submission.supplier_link) ? submission.supplier_link : "";
   const initialOption = allOptions.find((option) => option.product_link === initialSupplierLink) || allOptions[0];
@@ -372,9 +394,18 @@ export function AdminQuoteTools({
     const vehicle = vehicleLabel(submission);
     const oemChoice = oemOption;
     const aftermarketChoice = aftermarketOption;
+    const hasReceiptPrice = Boolean(receiptPartCost.trim());
+    const genericTotal = hasReceiptPrice
+      ? calculateQuote(receiptPartCost, parsePrice(receiptShippingCost), receiptTaxOverride()).totalText
+      : aftermarketChoice
+        ? calculateQuote(aftermarketChoice.price, aftermarketChoice.shipping_cost).totalText
+        : "";
+    const genericDescription = hasReceiptPrice
+      ? `${receiptSupplier || "generic/aftermarket"} option`
+      : "quality aftermarket option";
 
-    return oemChoice && aftermarketChoice
-      ? `Hi ${submission.customer_name}, we found two options for your ${vehicle} mirror: OEM (manufacturer) part for ${calculateQuote(oemChoice.price, oemChoice.shipping_cost).totalText}, or a quality aftermarket option for ${calculateQuote(aftermarketChoice.price, aftermarketChoice.shipping_cost).totalText}. Let me know which you'd prefer!`
+    return oemChoice && (aftermarketChoice || hasReceiptPrice)
+      ? `Hi ${submission.customer_name}, we found two options for your ${vehicle} mirror: OEM (manufacturer) part for ${calculateQuote(oemChoice.price, oemChoice.shipping_cost).totalText}, or a ${genericDescription} for ${genericTotal}. Let me know which you'd prefer!`
       : `Hi ${submission.customer_name}, your ${vehicle} mirror is ready to quote: ${totalText || calculateQuote(partPrice).totalText} total, estimated delivery in ${deliveryText || "the listed timeframe"}. Let me know if you'd like to move forward!`;
   }
 
