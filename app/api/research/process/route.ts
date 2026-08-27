@@ -8,39 +8,40 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-async function getAuthorizedSubmissionId(request: NextRequest) {
+async function getAuthorization(request: NextRequest) {
   const secret = process.env.CRON_SECRET?.trim();
   const jobId = Number(request.nextUrl.searchParams.get("job") || "");
   const token = request.nextUrl.searchParams.get("token") || "";
+  const force = request.nextUrl.searchParams.get("force") === "1";
 
   if (Number.isInteger(jobId) && jobId > 0 && isValidResearchToken(jobId, token)) {
-    return jobId;
+    return { authorized: true, submissionId: jobId, force: false };
   }
 
   if (secret && request.headers.get("authorization") === `Bearer ${secret}`) {
-    return null;
+    return { authorized: true, submissionId: Number.isInteger(jobId) && jobId > 0 ? jobId : null, force };
   }
 
   if (await hasAdminSession()) {
-    return null;
+    return { authorized: true, submissionId: Number.isInteger(jobId) && jobId > 0 ? jobId : null, force };
   }
 
   if (!secret && process.env.NODE_ENV !== "production") {
-    return null;
+    return { authorized: true, submissionId: Number.isInteger(jobId) && jobId > 0 ? jobId : null, force };
   }
 
-  return false;
+  return { authorized: false, submissionId: null, force: false };
 }
 
 async function processResearchJob(request: NextRequest) {
-  const authorizedSubmissionId = await getAuthorizedSubmissionId(request);
+  const authorization = await getAuthorization(request);
 
-  if (authorizedSubmissionId === false) {
+  if (!authorization.authorized) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const job = authorizedSubmissionId
-    ? await claimResearchJobForSubmission(authorizedSubmissionId)
+  const job = authorization.submissionId
+    ? await claimResearchJobForSubmission(authorization.submissionId, authorization.force)
     : await claimNextResearchJob();
 
   if (!job) {

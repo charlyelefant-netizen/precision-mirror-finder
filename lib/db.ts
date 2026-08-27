@@ -438,7 +438,7 @@ export async function claimNextResearchJob(): Promise<ResearchJob | null> {
         SELECT id
         FROM research_jobs
         WHERE status = 'queued'
-          OR (status = 'processing' AND updated_at < NOW() - INTERVAL '10 minutes')
+          OR (status = 'processing' AND updated_at < NOW() - INTERVAL '2 minutes')
           OR (status = 'failed' AND attempts < 3)
         ORDER BY created_at ASC, id ASC
         FOR UPDATE SKIP LOCKED
@@ -461,7 +461,7 @@ export async function claimNextResearchJob(): Promise<ResearchJob | null> {
       SELECT id, submission_id, attempts
       FROM research_jobs
       WHERE status = 'queued'
-        OR status = 'processing'
+        OR (status = 'processing' AND datetime(updated_at) < datetime('now', '-2 minutes'))
         OR (status = 'failed' AND attempts < 3)
       ORDER BY datetime(created_at) ASC, id ASC
       LIMIT 1
@@ -477,7 +477,7 @@ export async function claimNextResearchJob(): Promise<ResearchJob | null> {
   return { ...job, attempts: job.attempts + 1 };
 }
 
-export async function claimResearchJobForSubmission(submissionId: number): Promise<ResearchJob | null> {
+export async function claimResearchJobForSubmission(submissionId: number, force = false): Promise<ResearchJob | null> {
   await migrateDatabase();
 
   if (isPostgres()) {
@@ -489,13 +489,16 @@ export async function claimResearchJobForSubmission(submissionId: number): Promi
           updated_at = NOW()
       WHERE submission_id = $1
         AND (
+          $2::boolean = TRUE
+          OR
           status = 'queued'
-          OR (status = 'processing' AND updated_at < NOW() - INTERVAL '10 minutes')
+          OR (status = 'processing' AND updated_at < NOW() - INTERVAL '2 minutes')
           OR (status = 'failed' AND attempts < 3)
         )
+        AND status <> 'completed'
       RETURNING id, submission_id, attempts
     `,
-      [submissionId]
+      [submissionId, force]
     );
 
     return result.rows[0] ? (result.rows[0] as ResearchJob) : null;
@@ -508,13 +511,16 @@ export async function claimResearchJobForSubmission(submissionId: number): Promi
       FROM research_jobs
       WHERE submission_id = ?
         AND (
+          ? = 1
+          OR
           status = 'queued'
-          OR status = 'processing'
+          OR (status = 'processing' AND datetime(updated_at) < datetime('now', '-2 minutes'))
           OR (status = 'failed' AND attempts < 3)
         )
+        AND status <> 'completed'
       LIMIT 1
     `)
-    .get(submissionId) as ResearchJob | undefined;
+    .get(submissionId, force ? 1 : 0) as ResearchJob | undefined;
 
   if (!job) return null;
 
