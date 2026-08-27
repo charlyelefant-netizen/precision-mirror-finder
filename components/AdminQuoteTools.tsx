@@ -86,7 +86,11 @@ function normalizeShippedOption(option: SupplierOption): QuoteOption {
     product_link: option.product_link,
     estimated_shipping: option.estimated_shipping,
     badges: option.option_labels,
-    detail: option.tracking_offered ? "Tracking offered" : "Tracking not confirmed"
+    detail: option.supplier_name === "eBay" && option.availability
+      ? option.availability
+      : option.tracking_offered
+        ? "Tracking offered"
+        : "Tracking not confirmed"
   };
 }
 

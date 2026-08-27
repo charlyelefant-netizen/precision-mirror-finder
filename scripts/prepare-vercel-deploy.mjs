@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 
 const envExample = fs.existsSync(".env.example") ? fs.readFileSync(".env.example", "utf8") : "";
-const required = ["ADMIN_PASSWORD", "GEMINI_API_KEY", "AUTH_SECRET", "CRON_SECRET"];
+const required = ["ADMIN_PASSWORD", "GEMINI_API_KEY", "EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "AUTH_SECRET", "CRON_SECRET"];
 const missingFromExample = required.filter((key) => !envExample.includes(`${key}=`));
 
 console.log("Precision Mirror Finder production checklist\n");
@@ -28,6 +28,10 @@ console.log("   Vercel will add POSTGRES_URL automatically.\n");
 console.log("3. Add these Environment Variables in Vercel Project Settings:");
 console.log("   ADMIN_PASSWORD=<your admin dashboard password>");
 console.log("   GEMINI_API_KEY=<your Gemini API key>");
+console.log("   EBAY_CLIENT_ID=<your eBay App ID / Client ID>");
+console.log("   EBAY_CLIENT_SECRET=<your eBay Cert ID / Client Secret>");
+console.log("   EBAY_ENVIRONMENT=production");
+console.log("   EBAY_MARKETPLACE_ID=EBAY_US");
 console.log(`   AUTH_SECRET=${crypto.randomBytes(32).toString("hex")}`);
 console.log(`   CRON_SECRET=${crypto.randomBytes(32).toString("hex")}`);
 console.log("   SALES_TAX_RATE=0.06625\n");

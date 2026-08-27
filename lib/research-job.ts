@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { getSubmission, updateSubmission } from "@/lib/db";
+import { augmentResearchWithEbay } from "@/lib/ebay";
 import { researchMirrorWithGemini } from "@/lib/gemini";
 import type { GeminiMirrorResearch, MirrorSubmission } from "@/lib/types";
 
@@ -58,6 +59,7 @@ export async function runResearchForSubmission(id: number) {
   }
 
   logResearch(id, "submission_research_started");
-  const research = await researchMirrorWithGemini(submission, (message, details) => logResearch(id, message, details));
+  const geminiResearch = await researchMirrorWithGemini(submission, (message, details) => logResearch(id, message, details));
+  const research = await augmentResearchWithEbay(submission, geminiResearch, (message, details) => logResearch(id, message, details));
   await saveResearch(submission, research);
 }

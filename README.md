@@ -21,6 +21,10 @@ Create or edit `.env.local` in the project root:
 ```bash
 ADMIN_PASSWORD=replace-this-with-your-admin-password
 GEMINI_API_KEY=replace-this-with-your-gemini-api-key
+EBAY_CLIENT_ID=replace-this-with-your-ebay-client-id
+EBAY_CLIENT_SECRET=replace-this-with-your-ebay-client-secret
+EBAY_ENVIRONMENT=production
+EBAY_MARKETPLACE_ID=EBAY_US
 SALES_TAX_RATE=0.06625
 AUTH_SECRET=replace-this-with-a-long-random-string
 CRON_SECRET=replace-this-with-a-long-random-string
@@ -48,6 +52,8 @@ node scripts/migrate-database.mjs --postgres
 ## Background Research Queue
 
 Customer submissions enqueue a research job and redirect immediately. The confirmation page calls `/api/research/process` with a signed one-job token, so Gemini research runs in a separate worker request with a longer timeout instead of inside the customer form submission. The admin dashboard also kicks the worker when queued research is visible.
+
+After Gemini identifies likely fitment and part numbers, the worker also checks the official eBay Browse API when `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET` are configured. eBay results are merged into supplier cards and sorted by delivered cost, so low-cost used OEM listings can appear ahead of higher retail listings.
 
 For manual or scheduled worker calls, protect that endpoint with:
 
@@ -86,6 +92,10 @@ git push -u origin main
 ```bash
 ADMIN_PASSWORD=<your admin dashboard password>
 GEMINI_API_KEY=<your Gemini API key>
+EBAY_CLIENT_ID=<your eBay App ID / Client ID>
+EBAY_CLIENT_SECRET=<your eBay Cert ID / Client Secret>
+EBAY_ENVIRONMENT=production
+EBAY_MARKETPLACE_ID=EBAY_US
 AUTH_SECRET=<a long random string>
 CRON_SECRET=<a long random string>
 SALES_TAX_RATE=0.06625
