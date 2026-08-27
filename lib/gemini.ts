@@ -156,7 +156,7 @@ function isProductPageUrl(value: string) {
     const normalized = `${url.hostname}${url.pathname}`.toLowerCase();
     const assetFilePattern = /\.(?:avif|bmp|gif|ico|jpeg|jpg|png|svg|webp|css|js|mjs|map|pdf)(?:$|[?#])/i;
     const assetPathPattern = /(?:^|[./_-])(?:assets?|cdn|images?|img|media|static|illustrations?|cdn-illustrations)(?:[./_-]|$)/i;
-    const listingPathPattern = /\/(?:catalog|search|category|categories|collections|browse)(?:\/|$)/i;
+    const listingPathPattern = /\/(?:catalog|search|category|categories|collections|browse|parts-list|part-list|parts-catalog|diagram|diagrams|schematic|schematics)(?:\/|$)/i;
 
     return (url.protocol === "http:" || url.protocol === "https:") &&
       !assetFilePattern.test(url.pathname) &&
