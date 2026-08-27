@@ -213,14 +213,15 @@ export function AdminQuoteTools({
   const initialOption = allOptions.find((option) => option.product_link === submission.supplier_link) || allOptions[0];
   const initialPartPrice = submission.matched_part_price || initialOption?.price || "";
   const initialShippingCost = initialOption?.shipping_cost || 0;
+  const initialQuote = initialPartPrice ? calculateQuote(initialPartPrice, initialShippingCost).totalText : "";
   const [partNumber, setPartNumber] = useState(submission.matched_part_number || initialOption?.part_number || "");
   const [partPrice, setPartPrice] = useState(initialPartPrice);
   const [shippingCost, setShippingCost] = useState(String(initialShippingCost));
   const [supplierName, setSupplierName] = useState(submission.supplier_name || initialOption?.supplier_name || "");
   const [supplierLink, setSupplierLink] = useState(submission.supplier_link || initialOption?.product_link || "");
   const [estimatedShipping, setEstimatedShipping] = useState(submission.estimated_shipping || initialOption?.estimated_shipping || "");
-  const [quotedPrice, setQuotedPrice] = useState(() => submission.quoted_price || (initialPartPrice ? calculateQuote(initialPartPrice, initialShippingCost).totalText : ""));
-  const [quoteMessage, setQuoteMessage] = useState("");
+  const [quotedPrice, setQuotedPrice] = useState(() => submission.quoted_price || initialQuote);
+  const [quoteMessage, setQuoteMessage] = useState(() => initialOption ? buildQuoteMessage(submission.quoted_price || initialQuote, initialOption.estimated_shipping) : "");
   const [copied, setCopied] = useState(false);
 
   function calculateQuote(price: string, shipping = parsePrice(shippingCost)) {
@@ -245,25 +246,32 @@ export function AdminQuoteTools({
     setQuotedPrice(calculateQuote(price, shipping).totalText);
   }
 
+  function buildQuoteMessage(totalText: string, deliveryText: string) {
+    const vehicle = vehicleLabel(submission);
+    const oemChoice = oemOption;
+    const aftermarketChoice = aftermarketOption;
+
+    return oemChoice && aftermarketChoice
+      ? `Hi ${submission.customer_name}, we found two options for your ${vehicle} mirror: OEM (manufacturer) part for ${calculateQuote(oemChoice.price, oemChoice.shipping_cost).totalText}, or a quality aftermarket option for ${calculateQuote(aftermarketChoice.price, aftermarketChoice.shipping_cost).totalText}. Let me know which you'd prefer!`
+      : `Hi ${submission.customer_name}, your ${vehicle} mirror is ready to quote: ${totalText || calculateQuote(partPrice).totalText} total, estimated delivery in ${deliveryText || "the listed timeframe"}. Let me know if you'd like to move forward!`;
+  }
+
   function selectOption(option: QuoteOption) {
     const price = option.price;
+    const calculatedQuote = calculateQuote(price, option.shipping_cost).totalText;
     setPartNumber(option.part_number || submission.matched_part_number);
     setPartPrice(price);
     setShippingCost(String(option.shipping_cost || 0));
     setSupplierName(option.supplier_name);
     setSupplierLink(option.product_link);
     setEstimatedShipping(option.estimated_shipping);
-    setQuotedPrice(calculateQuote(price, option.shipping_cost).totalText);
+    setQuotedPrice(calculatedQuote);
+    setQuoteMessage(buildQuoteMessage(calculatedQuote, option.estimated_shipping));
+    setCopied(false);
   }
 
   function generateMessage() {
-    const vehicle = vehicleLabel(submission);
-    const oemChoice = oemOption;
-    const aftermarketChoice = aftermarketOption;
-    const message = oemChoice && aftermarketChoice
-      ? `Hi ${submission.customer_name}, we found two options for your ${vehicle} mirror: OEM (manufacturer) part for ${calculateQuote(oemChoice.price, oemChoice.shipping_cost).totalText}, or a quality aftermarket option for ${calculateQuote(aftermarketChoice.price, aftermarketChoice.shipping_cost).totalText}. Let me know which you'd prefer!`
-      : `Hi ${submission.customer_name}, your ${vehicle} mirror is ready to quote: ${quotedPrice || calculateQuote(partPrice).totalText} total, estimated delivery in ${estimatedShipping || "the listed timeframe"}. Let me know if you'd like to move forward!`;
-    setQuoteMessage(message);
+    setQuoteMessage(buildQuoteMessage(quotedPrice || calculateQuote(partPrice).totalText, estimatedShipping));
     setCopied(false);
   }
 
