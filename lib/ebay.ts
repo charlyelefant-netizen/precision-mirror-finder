@@ -1,4 +1,5 @@
 import type { GeminiMirrorResearch, MirrorSubmission, SupplierOption } from "@/lib/types";
+import { conflictingVehicleMakes } from "@/lib/vehicle-consistency";
 
 type EbayEnvironment = "production" | "sandbox";
 
@@ -116,6 +117,20 @@ function titleLooksRelevant(title: string, side: string) {
   return hasMirror && !badPartOnly && (hasWantedSide || !hasOppositeSide);
 }
 
+function titleMatchesVehicle(title: string, submission: MirrorSubmission, partNumbers: string[]) {
+  const normalized = title.toLowerCase();
+  const make = submission.make.toLowerCase();
+  const model = submission.model.toLowerCase();
+  const hasExpectedMakeOrModel = Boolean(
+    (make && normalized.includes(make)) ||
+    (model && normalized.includes(model))
+  );
+  const hasKnownPartNumber = partNumbers.some((partNumber) => partNumber && normalized.includes(partNumber.toLowerCase()));
+  const conflicts = conflictingVehicleMakes(submission, title);
+
+  return conflicts.length === 0 && (hasExpectedMakeOrModel || hasKnownPartNumber);
+}
+
 function isDirectEbayItemUrl(value: string | undefined) {
   if (!value) return false;
 
@@ -208,8 +223,15 @@ async function searchEbay(query: string, token: string) {
   return body.itemSummaries || [];
 }
 
-function toSupplierOption(item: EbayItemSummary, submission: MirrorSubmission): SupplierOption | null {
-  if (!item.title || !isDirectEbayItemUrl(item.itemWebUrl) || !titleLooksRelevant(item.title, submission.side)) {
+function toSupplierOption(item: EbayItemSummary, submission: MirrorSubmission, partNumbers: string[]): SupplierOption | null {
+  const searchableText = `${item.title || ""} ${item.itemWebUrl || ""}`;
+
+  if (
+    !item.title ||
+    !isDirectEbayItemUrl(item.itemWebUrl) ||
+    !titleLooksRelevant(item.title, submission.side) ||
+    !titleMatchesVehicle(searchableText, submission, partNumbers)
+  ) {
     return null;
   }
 
@@ -263,12 +285,18 @@ export async function augmentResearchWithEbay(
   if (!token) return research;
 
   const queries = buildQueries(submission, research);
+  const partNumbers = Array.from(new Set([
+    research.likely_part_number,
+    research.oem_option?.part_number,
+    research.aftermarket_option?.part_number,
+    ...research.supplier_options.map((option) => option.part_number)
+  ].filter((partNumber): partNumber is string => Boolean(partNumber))));
   const found: SupplierOption[] = [];
 
   for (const query of queries) {
     try {
       const items = await searchEbay(query, token);
-      found.push(...items.map((item) => toSupplierOption(item, submission)).filter(Boolean) as SupplierOption[]);
+      found.push(...items.map((item) => toSupplierOption(item, submission, partNumbers)).filter(Boolean) as SupplierOption[]);
       log("ebay_search_success", { query, results: items.length });
     } catch (error) {
       log("ebay_search_failed", { query, error: error instanceof Error ? error.message : String(error) });

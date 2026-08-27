@@ -4,6 +4,7 @@ import { getSubmission, updateSubmission } from "@/lib/db";
 import { augmentResearchWithEbay } from "@/lib/ebay";
 import { researchMirrorWithGemini } from "@/lib/gemini";
 import type { GeminiMirrorResearch, MirrorSubmission } from "@/lib/types";
+import { enforceResearchVehicleConsistency } from "@/lib/vehicle-consistency";
 
 function logResearch(id: number, message: string, details: Record<string, unknown> = {}) {
   const line = `${new Date().toISOString()} submission=${id} ${message} ${JSON.stringify(details)}\n`;
@@ -69,6 +70,12 @@ export async function runResearchForSubmission(id: number) {
 
   logResearch(id, "submission_research_started");
   const geminiResearch = await researchMirrorWithGemini(submission, (message, details) => logResearch(id, message, details));
-  const research = await augmentResearchWithEbay(submission, geminiResearch, (message, details) => logResearch(id, message, details));
+  const augmentedResearch = await augmentResearchWithEbay(submission, geminiResearch, (message, details) => logResearch(id, message, details));
+  const research = enforceResearchVehicleConsistency(submission, augmentedResearch);
+
+  if (!research.confident_match && augmentedResearch.confident_match) {
+    logResearch(id, "vehicle_conflict_blocked", { reason: research.manual_review_reason });
+  }
+
   await saveResearch(submission, research);
 }
