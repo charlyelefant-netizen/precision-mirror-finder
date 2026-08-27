@@ -153,10 +153,12 @@ function isProductPageUrl(value: string) {
     const normalized = `${url.hostname}${url.pathname}`.toLowerCase();
     const assetFilePattern = /\.(?:avif|bmp|gif|ico|jpeg|jpg|png|svg|webp|css|js|mjs|map|pdf)(?:$|[?#])/i;
     const assetPathPattern = /(?:^|[./_-])(?:assets?|cdn|images?|img|media|static|illustrations?|cdn-illustrations)(?:[./_-]|$)/i;
+    const listingPathPattern = /\/(?:catalog|search|category|categories|collections|browse)(?:\/|$)/i;
 
     return (url.protocol === "http:" || url.protocol === "https:") &&
       !assetFilePattern.test(url.pathname) &&
-      !assetPathPattern.test(normalized);
+      !assetPathPattern.test(normalized) &&
+      !listingPathPattern.test(url.pathname);
   } catch {
     return false;
   }
@@ -311,6 +313,7 @@ Rules:
 - Return places_to_call with the closest 2-3 relevant major auto-parts chains within 15 miles of 364 Ridge Ave, Lakewood, NJ 08701 that are worth calling about this part. Use only LKQ, AutoZone, O'Reilly Auto Parts, Advance Auto Parts, and NAPA. Include store name, phone number, distance, and a short reason_to_call. Skip small independent shops and salvage yards.
 - Set confident_match false when exact fitment is uncertain, the needed mirror features are ambiguous, or no direct product URL is confirmed.
 - Every product_link/recommended_product_link must be a direct retailer product page where the part can be purchased. Do not return image URLs, CDN URLs, illustration/asset URLs, PDF links, static files, or media resources.
+- Do not return catalog pages, search result pages, category pages, browse pages, or generic mirror listing pages. The URL must identify the specific purchasable part.
 - If search finds only an image/CDN/asset URL for an option, find the actual product page URL instead; if you cannot confirm the product page URL, exclude that option.
 - Do not invent part numbers, prices, suppliers, links, shipping timeframes, or tracking availability.
 `.trim();

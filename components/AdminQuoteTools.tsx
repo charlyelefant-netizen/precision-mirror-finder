@@ -33,10 +33,12 @@ function isProductPageUrl(value: string) {
     const normalized = `${url.hostname}${url.pathname}`.toLowerCase();
     const assetFilePattern = /\.(?:avif|bmp|gif|ico|jpeg|jpg|png|svg|webp|css|js|mjs|map|pdf)(?:$|[?#])/i;
     const assetPathPattern = /(?:^|[./_-])(?:assets?|cdn|images?|img|media|static|illustrations?|cdn-illustrations)(?:[./_-]|$)/i;
+    const listingPathPattern = /\/(?:catalog|search|category|categories|collections|browse)(?:\/|$)/i;
 
     return (url.protocol === "http:" || url.protocol === "https:") &&
       !assetFilePattern.test(url.pathname) &&
-      !assetPathPattern.test(normalized);
+      !assetPathPattern.test(normalized) &&
+      !listingPathPattern.test(url.pathname);
   } catch {
     return false;
   }
@@ -215,16 +217,21 @@ export function AdminQuoteTools({
   const { shippedOptions, oemOption, aftermarketOption, localOptions } = useMemo(() => parseResearchOptions(submission), [submission]);
   const partTypeOptions = [oemOption, aftermarketOption].filter(Boolean) as QuoteOption[];
   const allOptions = [...partTypeOptions, ...localOptions, ...shippedOptions];
-  const initialOption = allOptions.find((option) => option.product_link === submission.supplier_link) || allOptions[0];
-  const initialPartPrice = submission.matched_part_price || initialOption?.price || "";
+  const initialSupplierLink = isProductPageUrl(submission.supplier_link) ? submission.supplier_link : "";
+  const initialOption = allOptions.find((option) => option.product_link === initialSupplierLink) || allOptions[0];
+  const useSavedSupplier = Boolean(initialSupplierLink);
+  const initialPartNumber = useSavedSupplier ? submission.matched_part_number || initialOption?.part_number || "" : initialOption?.part_number || submission.matched_part_number || "";
+  const initialPartPrice = useSavedSupplier ? submission.matched_part_price || initialOption?.price || "" : initialOption?.price || submission.matched_part_price || "";
   const initialShippingCost = initialOption?.shipping_cost || 0;
+  const initialSupplierName = useSavedSupplier ? submission.supplier_name || initialOption?.supplier_name || "" : initialOption?.supplier_name || submission.supplier_name || "";
+  const initialEstimatedShipping = useSavedSupplier ? submission.estimated_shipping || initialOption?.estimated_shipping || "" : initialOption?.estimated_shipping || submission.estimated_shipping || "";
   const initialQuote = initialPartPrice ? calculateQuote(initialPartPrice, initialShippingCost).totalText : "";
-  const [partNumber, setPartNumber] = useState(submission.matched_part_number || initialOption?.part_number || "");
+  const [partNumber, setPartNumber] = useState(initialPartNumber);
   const [partPrice, setPartPrice] = useState(initialPartPrice);
   const [shippingCost, setShippingCost] = useState(String(initialShippingCost));
-  const [supplierName, setSupplierName] = useState(submission.supplier_name || initialOption?.supplier_name || "");
-  const [supplierLink, setSupplierLink] = useState(submission.supplier_link || initialOption?.product_link || "");
-  const [estimatedShipping, setEstimatedShipping] = useState(submission.estimated_shipping || initialOption?.estimated_shipping || "");
+  const [supplierName, setSupplierName] = useState(initialSupplierName);
+  const [supplierLink, setSupplierLink] = useState(initialSupplierLink || initialOption?.product_link || "");
+  const [estimatedShipping, setEstimatedShipping] = useState(initialEstimatedShipping);
   const [quotedPrice, setQuotedPrice] = useState(() => submission.quoted_price || initialQuote);
   const [quoteMessage, setQuoteMessage] = useState(() => initialOption ? buildQuoteMessage(submission.quoted_price || initialQuote, initialOption.estimated_shipping) : "");
   const [copied, setCopied] = useState(false);
