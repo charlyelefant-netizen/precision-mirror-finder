@@ -18,25 +18,27 @@ function logResearch(id: number, message: string, details: Record<string, unknow
 
 function isConfidentResearch(research: GeminiMirrorResearch) {
   const firstOption = research.supplier_options?.[0];
+  const firstTypedOption = research.oem_option || research.aftermarket_option;
 
   return Boolean(
     research.confident_match &&
-    research.supplier_options?.length >= 1 &&
-    (research.likely_part_number || firstOption?.part_number)
+    (research.supplier_options?.length >= 1 || firstTypedOption) &&
+    (research.likely_part_number || firstOption?.part_number || firstTypedOption?.part_number)
   );
 }
 
 async function saveResearch(submission: MirrorSubmission, research: GeminiMirrorResearch) {
   const firstOption = research.supplier_options?.[0];
+  const firstTypedOption = research.oem_option || research.aftermarket_option;
   const confident = isConfidentResearch(research);
 
   await updateSubmission(submission.id, {
     status: confident ? "Ready to Quote" : "Manual Review",
-    matched_part_number: confident ? research.likely_part_number || firstOption?.part_number || "" : "",
-    matched_part_price: confident ? research.recommended_price || firstOption?.price || "" : "",
-    supplier_name: confident ? research.recommended_supplier_name || firstOption?.supplier_name || "" : "",
-    supplier_link: confident ? research.recommended_product_link || firstOption?.product_link || "" : "",
-    estimated_shipping: confident ? research.recommended_estimated_shipping || firstOption?.estimated_shipping || "" : "",
+    matched_part_number: confident ? research.likely_part_number || firstOption?.part_number || firstTypedOption?.part_number || "" : "",
+    matched_part_price: confident ? research.recommended_price || firstOption?.price || firstTypedOption?.price || "" : "",
+    supplier_name: confident ? research.recommended_supplier_name || firstOption?.supplier_name || firstTypedOption?.supplier_name || "" : "",
+    supplier_link: confident ? research.recommended_product_link || firstOption?.product_link || firstTypedOption?.product_link || "" : "",
+    estimated_shipping: confident ? research.recommended_estimated_shipping || firstOption?.estimated_shipping || firstTypedOption?.estimated_shipping || "" : "",
     quoted_price: "",
     notes: confident ? research.research_summary || "AI research completed." : research.manual_review_reason || "Manual review required.",
     internal_debug: JSON.stringify(research, null, 2),

@@ -426,11 +426,16 @@ Rules:
 - Return only schema-valid JSON.
 - When VIN is missing, infer mirror features from year/make/model/trim using reliable fitment or OEM catalog pages. If multiple incompatible mirror packages remain likely, set confident_match false and explain briefly.
 - Match vehicle/body, side, trim/features, color or paint status, connector notes, and fitment years.
-- Return 2-4 distinct shipped supplier options when available, not duplicate copies of the same listing. Choose options because they are cheapest delivered, fastest delivery, best OEM/original match, or best new aftermarket/generic value.
+- Return 2-4 distinct shipped supplier options when available. Each option must have a clear reason to exist:
+  1. cheapest delivered total (price + shipping_cost),
+  2. fastest delivery,
+  3. best OEM/original manufacturer fit,
+  4. best aftermarket/generic value.
+- Do not return duplicate copies of the same listing. Same retailer URL, same marketplace item, or same supplier + same part number counts as a duplicate even if the labels differ.
 - Search eBay Motors/direct eBay item pages for low-cost used OEM mirrors. Include eBay only when the direct item page appears to match exact side/features/fitment and shows price plus shipping.
-- Return oem_option and aftermarket_option when both exist. OEM may be new, used, refurbished, or remanufactured. Aftermarket means generic/new replacement when available. Use null for unavailable types and explain in research_summary.
-- oem_option and aftermarket_option should identify the best representative choice of each type. If that same link is also in supplier_options, do not return another duplicate listing for it unless the supplier, price, condition, or delivery is meaningfully different.
-- Mark the cheapest delivered option (price + shipping_cost) with "cheapest" and the soonest delivery with "fastest", even if the cheapest option is used/eBay.
+- Return oem_option and aftermarket_option when both exist. OEM/original may be new, used, refurbished, or remanufactured. Aftermarket/generic means a non-OEM replacement when available. Use null for unavailable types and explain in research_summary.
+- oem_option must be the best actual OEM/original choice. aftermarket_option must be the best actual generic/aftermarket choice. They should not point to the same listing or same part unless no true alternative exists.
+- Mark the cheapest delivered option (price + shipping_cost) with "cheapest" and the soonest delivery with "fastest", even if they are the same option.
 - Include local pickup options only when a real direct inventory/product URL exists near Lakewood, NJ.
 - Return places_to_call with the closest 2-3 relevant major chains within 15 miles: LKQ, AutoZone, O'Reilly Auto Parts, Advance Auto Parts, or NAPA. Include store name, phone number, distance, and reason_to_call.
 - Set confident_match false only when exact fitment is genuinely uncertain or no direct purchasable product URL is confirmed.

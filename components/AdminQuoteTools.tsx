@@ -19,6 +19,15 @@ type QuoteOption = {
   detail: string;
 };
 
+type QuoteMessageInput = {
+  totalText?: string;
+  deliveryText?: string;
+  receiptPartCost?: string;
+  receiptShippingCost?: string;
+  receiptSalesTax?: string;
+  receiptSupplier?: string;
+};
+
 function parsePrice(value: string) {
   const match = value.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : 0;
@@ -76,21 +85,34 @@ function withDerivedBadges(options: QuoteOption[]) {
   });
 }
 
-function optionIdentity(option: Pick<QuoteOption, "part_number" | "supplier_name" | "product_link" | "part_type">) {
-  return [option.part_type || "", option.part_number, option.supplier_name, option.product_link]
+function listingIdentity(option: Pick<QuoteOption, "part_number" | "supplier_name" | "product_link">) {
+  return [option.product_link || `${option.supplier_name}:${option.part_number}`]
     .map((value) => value.toLowerCase().trim())
     .join("|");
 }
 
 function uniqueOptions(options: QuoteOption[]) {
-  const seen = new Set<string>();
+  const seen = new Map<string, QuoteOption>();
 
-  return options.filter((option) => {
-    const key = optionIdentity(option);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+  options.forEach((option) => {
+    const key = listingIdentity(option);
+    const existing = seen.get(key);
+
+    if (!existing) {
+      seen.set(key, option);
+      return;
+    }
+
+    const badges = Array.from(new Set([...existing.badges, ...option.badges])) as QuoteOption["badges"];
+    const detail = existing.detail || option.detail;
+    seen.set(key, {
+      ...existing,
+      badges,
+      detail
+    });
   });
+
+  return Array.from(seen.values());
 }
 
 function isProductPageUrl(value: string) {
@@ -206,20 +228,30 @@ function parseResearchOptions(submission: MirrorSubmission) {
     const shippedOptions = Array.isArray(parsed.supplier_options)
       ? parsed.supplier_options.map(normalizeShippedOption).filter((option) => isProductPageUrl(option.product_link))
       : [];
+    const uniqueShippedOptions = withDerivedBadges(uniqueOptions(shippedOptions));
     const oemOption = parsed.oem_option
       ? normalizePartTypeOption(parsed.oem_option)
-      : shippedOptions.find((option) => option.part_type === "OEM");
+      : uniqueShippedOptions.find((option) => option.part_type === "OEM");
     const aftermarketOption = parsed.aftermarket_option
       ? normalizePartTypeOption(parsed.aftermarket_option)
-      : shippedOptions.find((option) => option.part_type === "Aftermarket");
+      : uniqueShippedOptions.find((option) => option.part_type === "Aftermarket");
 
     const partTypeOptions = [oemOption, aftermarketOption].filter(
       (option): option is QuoteOption => Boolean(option && isProductPageUrl(option.product_link))
-    );
-    const partTypeKeys = new Set(partTypeOptions.map(optionIdentity));
+    ).map((option) => {
+      const matchingSupplierOption = uniqueShippedOptions.find((supplierOption) => listingIdentity(supplierOption) === listingIdentity(option));
+      return matchingSupplierOption
+        ? {
+            ...option,
+            badges: Array.from(new Set([...option.badges, ...matchingSupplierOption.badges])) as QuoteOption["badges"],
+            detail: option.detail || matchingSupplierOption.detail
+          }
+        : option;
+    });
+    const partTypeKeys = new Set(partTypeOptions.map(listingIdentity));
 
     return {
-      shippedOptions: withDerivedBadges(uniqueOptions(shippedOptions)).filter((option) => !partTypeKeys.has(optionIdentity(option))),
+      shippedOptions: uniqueShippedOptions.filter((option) => !partTypeKeys.has(listingIdentity(option))),
       oemOption: partTypeOptions.find((option) => option.part_type === "OEM"),
       aftermarketOption: partTypeOptions.find((option) => option.part_type === "Aftermarket"),
       localOptions: Array.isArray(parsed.local_pickup_options)
@@ -326,7 +358,7 @@ function OptionCard({
           <dd className="font-semibold">{formatMoney(option.shipping_cost)}</dd>
         </div>
       </dl>
-      <p className="mt-2 text-xs font-medium text-muted">{option.detail}</p>
+      <p className="mt-2 text-xs font-medium text-muted">{option.detail || "Shown because it is a distinct purchasable option for this request."}</p>
     </button>
   );
 }
@@ -374,39 +406,54 @@ export function AdminQuoteTools({
     return receiptSalesTax.trim() ? parsePrice(receiptSalesTax) : undefined;
   }
 
-  function calculateQuote(price: string, shipping = parsePrice(shippingCost), taxOverride = receiptTaxOverride()) {
+  function calculateQuote(price: string, shipping = parsePrice(shippingCost), taxOverride?: number) {
     return calculateQuoteTotals(price, shipping, taxRate, taxOverride);
   }
 
   function recalculateQuote(price = partPrice, shipping = parsePrice(shippingCost)) {
-    setQuotedPrice(calculateQuote(price, shipping).totalText);
+    setQuotedPrice(calculateQuote(price, shipping, receiptTaxOverride()).totalText);
   }
 
-  function applyReceiptNumbers(nextPartCost: string, nextShippingCost: string, nextSalesTax: string) {
+  function applyReceiptNumbers(nextPartCost: string, nextShippingCost: string, nextSalesTax: string, nextSupplier = receiptSupplier) {
     const newQuote = calculateQuote(nextPartCost || partPrice, parsePrice(nextShippingCost), nextSalesTax.trim() ? parsePrice(nextSalesTax) : undefined);
     setPartPrice(nextPartCost || partPrice);
     setShippingCost(String(parsePrice(nextShippingCost)));
     setQuotedPrice(newQuote.totalText);
-    setQuoteMessage(buildQuoteMessage(newQuote.totalText, estimatedShipping));
+    setQuoteMessage(buildQuoteMessage({
+      totalText: newQuote.totalText,
+      deliveryText: estimatedShipping,
+      receiptPartCost: nextPartCost,
+      receiptShippingCost: nextShippingCost,
+      receiptSalesTax: nextSalesTax,
+      receiptSupplier: nextSupplier
+    }));
   }
 
-  function buildQuoteMessage(totalText: string, deliveryText: string) {
+  function buildQuoteMessage(input: QuoteMessageInput = {}) {
     const vehicle = vehicleLabel(submission);
     const oemChoice = oemOption;
     const aftermarketChoice = aftermarketOption;
-    const hasReceiptPrice = Boolean(receiptPartCost.trim());
+    const currentReceiptPartCost = input.receiptPartCost ?? receiptPartCost;
+    const currentReceiptShippingCost = input.receiptShippingCost ?? receiptShippingCost;
+    const currentReceiptSalesTax = input.receiptSalesTax ?? receiptSalesTax;
+    const currentReceiptSupplier = input.receiptSupplier ?? receiptSupplier;
+    const hasReceiptPrice = Boolean(currentReceiptPartCost.trim());
     const genericTotal = hasReceiptPrice
-      ? calculateQuote(receiptPartCost, parsePrice(receiptShippingCost), receiptTaxOverride()).totalText
+      ? calculateQuote(
+          currentReceiptPartCost,
+          parsePrice(currentReceiptShippingCost),
+          currentReceiptSalesTax.trim() ? parsePrice(currentReceiptSalesTax) : undefined
+        ).totalText
       : aftermarketChoice
         ? calculateQuote(aftermarketChoice.price, aftermarketChoice.shipping_cost).totalText
         : "";
     const genericDescription = hasReceiptPrice
-      ? `${receiptSupplier || "generic/aftermarket"} option`
+      ? `${currentReceiptSupplier || "generic/aftermarket"} option`
       : "quality aftermarket option";
 
     return oemChoice && (aftermarketChoice || hasReceiptPrice)
       ? `Hi ${submission.customer_name}, we found two options for your ${vehicle} mirror: OEM (manufacturer) part for ${calculateQuote(oemChoice.price, oemChoice.shipping_cost).totalText}, or a ${genericDescription} for ${genericTotal}. Let me know which you'd prefer!`
-      : `Hi ${submission.customer_name}, your ${vehicle} mirror is ready to quote: ${totalText || calculateQuote(partPrice).totalText} total, estimated delivery in ${deliveryText || "the listed timeframe"}. Let me know if you'd like to move forward!`;
+      : `Hi ${submission.customer_name}, your ${vehicle} mirror is ready to quote: ${input.totalText || calculateQuote(partPrice, parsePrice(shippingCost), receiptTaxOverride()).totalText} total, estimated delivery in ${input.deliveryText || "the listed timeframe"}. Let me know if you'd like to move forward!`;
   }
 
   function selectOption(option: QuoteOption) {
@@ -419,12 +466,12 @@ export function AdminQuoteTools({
     setSupplierLink(option.product_link);
     setEstimatedShipping(option.estimated_shipping);
     setQuotedPrice(calculatedQuote);
-    setQuoteMessage(buildQuoteMessage(calculatedQuote, option.estimated_shipping));
+    setQuoteMessage(buildQuoteMessage({ totalText: calculatedQuote, deliveryText: option.estimated_shipping }));
     setCopied(false);
   }
 
   function generateMessage() {
-    setQuoteMessage(buildQuoteMessage(quotedPrice || calculateQuote(partPrice).totalText, estimatedShipping));
+    setQuoteMessage(buildQuoteMessage({ totalText: quotedPrice || calculateQuote(partPrice, parsePrice(shippingCost), receiptTaxOverride()).totalText, deliveryText: estimatedShipping }));
     setCopied(false);
   }
 
@@ -467,7 +514,7 @@ export function AdminQuoteTools({
       setReceiptOrderNumber(parsedOrderNumber);
       setReceiptDebug(JSON.stringify(parsed.raw || parsed, null, 2));
       setSupplierName(parsedSupplier || supplierName);
-      applyReceiptNumbers(parsedPartCost, parsedShippingCost, parsedSalesTax);
+      applyReceiptNumbers(parsedPartCost, parsedShippingCost, parsedSalesTax, parsedSupplier);
       setReceiptUploadState("done");
       const recognizedSupplier = parsedSupplier ? ` as ${parsedSupplier}` : "";
       setReceiptUploadMessage(parsed.confidence === "low" ? `Check these numbers: ${parsed.notes || "low confidence parse"}` : `Receipt read${recognizedSupplier}. Review the numbers, then save.`);
@@ -477,7 +524,7 @@ export function AdminQuoteTools({
     }
   }
 
-  const quoteBreakdown = calculateQuote(partPrice);
+  const quoteBreakdown = calculateQuote(partPrice, parsePrice(shippingCost), receiptTaxOverride());
   const taxLabel = receiptSalesTax.trim() ? "Receipt tax" : "Estimated NJ tax";
   const smsHref = `sms:${submission.customer_phone.replace(/[^\d+]/g, "")}?body=${encodeURIComponent(quoteMessage)}`;
   const ebaySearchHref = buildEbaySearchUrl(submission, partNumber);
@@ -485,7 +532,7 @@ export function AdminQuoteTools({
 
   return (
     <>
-      {allOptions.length > 1 ? (
+      {allOptions.length ? (
         <div className="space-y-3 sm:col-span-2 lg:col-span-4">
           {partTypeOptions.length ? (
             <div className="space-y-2">
@@ -535,26 +582,33 @@ export function AdminQuoteTools({
             </div>
           ) : null}
         </div>
-      ) : null}
+      ) : (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-semibold text-amber-900 sm:col-span-2 lg:col-span-4">
+          No verified buy-ready supplier cards were returned yet. Use Search eBay or Search Amazon below, then upload the receipt or checkout screenshot so the generic pricing can be added to the customer quote.
+        </div>
+      )}
 
-      {supplierLink ? (
+      {(supplierLink || partNumber || vehicleSearchLabel(submission)) ? (
         <div className="space-y-3 rounded-md border border-line bg-white p-4 sm:col-span-2 lg:col-span-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
               onClick={generateMessage}
+              disabled={!partPrice && !receiptPartCost}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-brand bg-white px-3 text-sm font-bold text-brand transition hover:bg-brand-soft"
             >
               <MessageSquare size={16} aria-hidden="true" />
               Generate Quote Message
             </button>
-            <a
-              href={supplierLink}
-              onClick={(event) => openSupplierLink(event, supplierLink)}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-brand px-3 text-sm font-bold text-white transition hover:bg-blue-800"
-            >
-              Buy This Part <ExternalLink size={15} aria-hidden="true" />
-            </a>
+            {supplierLink ? (
+              <a
+                href={supplierLink}
+                onClick={(event) => openSupplierLink(event, supplierLink)}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-brand px-3 text-sm font-bold text-white transition hover:bg-blue-800"
+              >
+                Buy This Part <ExternalLink size={15} aria-hidden="true" />
+              </a>
+            ) : null}
             <a
               href={ebaySearchHref}
               onClick={(event) => openSupplierLink(event, ebaySearchHref)}
