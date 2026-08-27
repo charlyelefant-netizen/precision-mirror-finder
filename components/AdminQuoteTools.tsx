@@ -306,7 +306,7 @@ export function AdminQuoteTools({
   const [supplierLink, setSupplierLink] = useState(initialSupplierLink || initialOption?.product_link || "");
   const [estimatedShipping, setEstimatedShipping] = useState(initialEstimatedShipping);
   const [quotedPrice, setQuotedPrice] = useState(() => submission.quoted_price || initialQuote);
-  const [quoteMessage, setQuoteMessage] = useState(() => initialOption ? buildQuoteMessage(submission.quoted_price || initialQuote, initialOption.estimated_shipping) : "");
+  const [quoteMessage, setQuoteMessage] = useState("");
   const [copied, setCopied] = useState(false);
   const [receiptSupplier, setReceiptSupplier] = useState(submission.receipt_supplier || "");
   const [receiptPartCost, setReceiptPartCost] = useState(submission.receipt_part_cost || "");
