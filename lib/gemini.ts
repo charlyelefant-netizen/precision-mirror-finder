@@ -356,7 +356,7 @@ function parseJsonObject(text: string): GeminiMirrorResearch {
       recommended_product_link: String(parsed.recommended_product_link || ""),
       recommended_estimated_shipping: String(parsed.recommended_estimated_shipping || ""),
       supplier_options: Array.isArray(parsed.supplier_options)
-        ? parsed.supplier_options.slice(0, 5).map((option) => ({
+        ? parsed.supplier_options.slice(0, 6).map((option) => ({
             part_number: String(option.part_number || parsed.likely_part_number || ""),
             part_type: option.part_type === "OEM" || option.part_type === "Aftermarket" ? option.part_type : undefined,
             condition: normalizeCondition(option.condition),
@@ -370,7 +370,7 @@ function parseJsonObject(text: string): GeminiMirrorResearch {
             option_labels: Array.isArray(option.option_labels)
               ? option.option_labels.filter((label) => label === "cheapest" || label === "fastest")
               : []
-          })).filter((option) => isProductPageUrl(option.product_link))
+          })).filter((option) => isProductPageUrl(option.product_link)).slice(0, 6)
         : [],
       oem_option: normalizePartTypeOption(parsed.oem_option || undefined, "OEM"),
       aftermarket_option: normalizePartTypeOption(parsed.aftermarket_option || undefined, "Aftermarket"),
@@ -427,15 +427,16 @@ Rules:
 - Return only schema-valid JSON.
 - When VIN is missing, infer mirror features from year/make/model/trim using reliable fitment or OEM catalog pages. If multiple incompatible mirror packages remain likely, set confident_match false and explain briefly.
 - Match vehicle/body, side, trim/features, color or paint status, connector notes, and fitment years.
-- Return 2-4 distinct shipped supplier options when available. Each option must have a clear reason to exist:
-  1. cheapest delivered total (price + shipping_cost),
-  2. fastest delivery,
-  3. best OEM/original manufacturer fit,
-  4. best aftermarket/generic value.
+- Return exactly these shipped supplier options when available, all as distinct purchasable product pages:
+  1. two OEM/original manufacturer options, preferably one new dealer/OEM-source option and one lower-cost used/refurbished OEM option from eBay, LKQ, a recycler, or a marketplace seller,
+  2. two generic/aftermarket options with strong fitment and low delivered cost.
+- If you cannot find two for a group, return the best one for that group and explain what was unavailable in research_summary.
+- Every supplier_options item must include part_type as either "OEM" or "Aftermarket" so the admin dashboard can group the cards correctly.
 - Do not return duplicate copies of the same listing. Same retailer URL, same marketplace item, or same supplier + same part number counts as a duplicate even if the labels differ.
 - Search eBay Motors/direct eBay item pages for low-cost used OEM mirrors. Include eBay only when the direct item page appears to match exact side/features/fitment and shows price plus shipping.
-- Return oem_option and aftermarket_option when both exist. OEM/original may be new, used, refurbished, or remanufactured. Aftermarket/generic means a non-OEM replacement when available. Use null for unavailable types and explain in research_summary.
-- oem_option must be the best actual OEM/original choice. aftermarket_option must be the best actual generic/aftermarket choice. They should not point to the same listing or same part unless no true alternative exists.
+- Return oem_option and aftermarket_option as the best single choice from each group. Also include the alternate OEM and alternate generic choices in supplier_options.
+- OEM/original may be new, used, refurbished, or remanufactured as long as it is an original manufacturer part. Aftermarket/generic means a non-OEM replacement when available. Use null only when that type truly cannot be found with a direct product page.
+- oem_option and aftermarket_option must not point to the same listing or same part. Do not label an OEM listing as Aftermarket just to fill the field.
 - Mark the cheapest delivered option (price + shipping_cost) with "cheapest" and the soonest delivery with "fastest", even if they are the same option.
 - Include local pickup options only when a real direct inventory/product URL exists near Lakewood, NJ.
 - Return places_to_call with the closest 2-3 relevant major chains within 15 miles: LKQ, AutoZone, O'Reilly Auto Parts, Advance Auto Parts, or NAPA. Include store name, phone number, distance, and reason_to_call.

@@ -314,7 +314,7 @@ export async function augmentResearchWithEbay(
     return research;
   }
 
-  const supplierOptions = relabelOptions([...ebayOptions, ...research.supplier_options].sort((a, b) => deliveredCost(a) - deliveredCost(b)).slice(0, 5));
+  const supplierOptions = relabelOptions([...ebayOptions, ...research.supplier_options].sort((a, b) => deliveredCost(a) - deliveredCost(b)).slice(0, 6));
   const recommended = supplierOptions[0];
 
   log("ebay_options_merged", {

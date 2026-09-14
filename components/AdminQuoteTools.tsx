@@ -32,6 +32,8 @@ type MessageRecord = {
   created_at: string;
 };
 
+type FollowUpMessageType = "replace" | "decline";
+
 function parseMessageHistory(value: string) {
   try {
     const parsed = JSON.parse(value || "[]");
@@ -395,8 +397,17 @@ export function AdminQuoteTools({
   taxRate: number;
 }) {
   const { shippedOptions, oemOption, aftermarketOption, localOptions } = useMemo(() => parseResearchOptions(submission), [submission]);
-  const partTypeOptions = withDerivedBadges([oemOption, aftermarketOption].filter(Boolean) as QuoteOption[]);
-  const allOptions = [...partTypeOptions, ...localOptions, ...shippedOptions];
+  const oemOptions = withDerivedBadges(uniqueOptions([
+    oemOption,
+    ...shippedOptions.filter((option) => option.part_type === "OEM")
+  ].filter(Boolean) as QuoteOption[])).slice(0, 2);
+  const aftermarketOptions = withDerivedBadges(uniqueOptions([
+    aftermarketOption,
+    ...shippedOptions.filter((option) => option.part_type === "Aftermarket")
+  ].filter(Boolean) as QuoteOption[])).slice(0, 2);
+  const primaryOptionKeys = new Set([...oemOptions, ...aftermarketOptions].map(listingIdentity));
+  const remainingShippedOptions = shippedOptions.filter((option) => !primaryOptionKeys.has(listingIdentity(option)));
+  const allOptions = [...oemOptions, ...aftermarketOptions, ...localOptions, ...remainingShippedOptions];
   const initialSupplierLink = isProductPageUrl(submission.supplier_link) ? submission.supplier_link : "";
   const initialOption = allOptions.find((option) => option.product_link === initialSupplierLink) || allOptions[0];
   const useSavedSupplier = Boolean(initialSupplierLink);
@@ -426,6 +437,7 @@ export function AdminQuoteTools({
   const [receiptUploadState, setReceiptUploadState] = useState<"idle" | "parsing" | "done" | "error">("idle");
   const [receiptUploadMessage, setReceiptUploadMessage] = useState("");
   const [messageHistory, setMessageHistory] = useState<MessageRecord[]>(() => parseMessageHistory(submission.message_history));
+  const [followUpType, setFollowUpType] = useState<FollowUpMessageType>("replace");
 
   function receiptTaxOverride() {
     return receiptSalesTax.trim() ? parsePrice(receiptSalesTax) : undefined;
@@ -521,6 +533,15 @@ export function AdminQuoteTools({
     );
   }
 
+  function generateFollowUpMessage() {
+    if (followUpType === "decline") {
+      setCustomerMessage(buildDeclineMessage(), "DECLINE reply");
+      return;
+    }
+
+    setCustomerMessage(buildProceedMessage(), "REPLACE reply");
+  }
+
   async function copyMessage() {
     await navigator.clipboard.writeText(quoteMessage);
     setCopied(true);
@@ -585,11 +606,27 @@ export function AdminQuoteTools({
       <input type="hidden" name="message_history" value={JSON.stringify(messageHistory)} />
       {allOptions.length ? (
         <div className="space-y-3 sm:col-span-2 lg:col-span-4">
-          {partTypeOptions.length ? (
+          {oemOptions.length ? (
             <div className="space-y-2">
-              <span className="field-label">OEM vs Aftermarket</span>
+              <span className="field-label">OEM options</span>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {partTypeOptions.map((option) => (
+                {oemOptions.map((option) => (
+                  <OptionCard
+                    key={option.id}
+                    option={option}
+                    selected={supplierLink === option.product_link}
+                    onSelect={selectOption}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {aftermarketOptions.length ? (
+            <div className="space-y-2">
+              <span className="field-label">Generic options</span>
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {aftermarketOptions.map((option) => (
                   <OptionCard
                     key={option.id}
                     option={option}
@@ -617,11 +654,11 @@ export function AdminQuoteTools({
             </div>
           ) : null}
 
-          {shippedOptions.length ? (
+          {remainingShippedOptions.length ? (
             <div className="space-y-2">
-              <span className="field-label">Shipped supplier options</span>
+              <span className="field-label">Other shipped options</span>
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                {shippedOptions.map((option) => (
+                {remainingShippedOptions.map((option) => (
                   <OptionCard
                     key={option.id}
                     option={option}
@@ -644,7 +681,7 @@ export function AdminQuoteTools({
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-2">
               <span className="field-label">Messages</span>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1.4fr_auto]">
                 <button
                   type="button"
                   onClick={generateMessage}
@@ -654,19 +691,20 @@ export function AdminQuoteTools({
                   <MessageSquare size={16} aria-hidden="true" />
                   Estimate
                 </button>
+                <select
+                  value={followUpType}
+                  onChange={(event) => setFollowUpType(event.target.value as FollowUpMessageType)}
+                  className="field-input h-10"
+                >
+                  <option value="replace">Customer says REPLACE</option>
+                  <option value="decline">Customer says DECLINE</option>
+                </select>
                 <button
                   type="button"
-                  onClick={() => setCustomerMessage(buildProceedMessage(), "REPLACE reply")}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 text-sm font-bold text-success transition hover:border-green-300"
+                  onClick={generateFollowUpMessage}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-bold text-ink transition hover:border-brand hover:text-brand"
                 >
-                  REPLACE reply
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCustomerMessage(buildDeclineMessage(), "DECLINE reply")}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-bold text-danger transition hover:border-red-300"
-                >
-                  DECLINE reply
+                  Follow-up
                 </button>
               </div>
             </div>
