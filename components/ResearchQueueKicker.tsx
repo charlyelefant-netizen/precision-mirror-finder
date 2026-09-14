@@ -21,6 +21,15 @@ export function ResearchQueueKicker({
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
+    let refreshTimer: number | undefined;
+
+    function scheduleRefresh() {
+      if (!refreshOnComplete || cancelled) return;
+
+      refreshTimer = window.setTimeout(() => {
+        if (!cancelled) router.refresh();
+      }, 4000);
+    }
 
     async function processQueuedResearch(attempt = 1) {
       const params = new URLSearchParams();
@@ -44,13 +53,16 @@ export function ResearchQueueKicker({
 
       if (!cancelled && refreshOnComplete) {
         router.refresh();
+        scheduleRefresh();
       }
     }
 
     processQueuedResearch();
+    scheduleRefresh();
 
     return () => {
       cancelled = true;
+      if (refreshTimer) window.clearTimeout(refreshTimer);
     };
   }, [enabled, jobId, refreshOnComplete, router, token]);
 

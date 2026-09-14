@@ -19,12 +19,13 @@ function logResearch(id: number, message: string, details: Record<string, unknow
 
 function isConfidentResearch(research: GeminiMirrorResearch) {
   const firstOption = research.supplier_options?.[0];
-  const firstTypedOption = research.oem_option || research.aftermarket_option;
 
   return Boolean(
     research.confident_match &&
-    (research.supplier_options?.length >= 1 || firstTypedOption) &&
-    (research.likely_part_number || firstOption?.part_number || firstTypedOption?.part_number)
+    research.oem_option &&
+    research.aftermarket_option &&
+    research.supplier_options?.length >= 1 &&
+    (research.likely_part_number || firstOption?.part_number)
   );
 }
 
@@ -32,6 +33,9 @@ async function saveResearch(submission: MirrorSubmission, research: GeminiMirror
   const firstOption = research.supplier_options?.[0];
   const firstTypedOption = research.oem_option || research.aftermarket_option;
   const confident = isConfidentResearch(research);
+  const manualReason = !confident && research.confident_match
+    ? "Manual review required: AI research did not return both a confirmed OEM option and a confirmed aftermarket/generic option with direct product links."
+    : research.manual_review_reason || "Manual review required.";
 
   await updateSubmission(submission.id, {
     status: confident ? "Ready to Quote" : "Manual Review",
@@ -41,7 +45,7 @@ async function saveResearch(submission: MirrorSubmission, research: GeminiMirror
     supplier_link: confident ? research.recommended_product_link || firstOption?.product_link || firstTypedOption?.product_link || "" : "",
     estimated_shipping: confident ? research.recommended_estimated_shipping || firstOption?.estimated_shipping || firstTypedOption?.estimated_shipping || "" : "",
     quoted_price: "",
-    notes: confident ? research.research_summary || "AI research completed." : research.manual_review_reason || "Manual review required.",
+    notes: confident ? research.research_summary || "AI research completed." : manualReason,
     internal_debug: JSON.stringify(research, null, 2),
     tracking_number: submission.tracking_number || "",
     receipt_supplier: submission.receipt_supplier || "",

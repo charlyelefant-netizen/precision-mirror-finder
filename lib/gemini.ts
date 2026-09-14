@@ -5,6 +5,7 @@ const FALLBACK_GEMINI_MODEL = "gemini-3.7-flash";
 const PRIMARY_MAX_ATTEMPTS = 4;
 const INITIAL_RETRY_DELAY_MS = 750;
 const REQUEST_TIMEOUT_MS = 18_000;
+const PRODUCT_LINK_TIMEOUT_MS = 4_000;
 
 const researchSchema = {
   type: "object",
@@ -268,7 +269,7 @@ async function productUrlStatus(value: string) {
         "User-Agent": "Mozilla/5.0 PrecisionMirrorFinder/1.0",
         "Accept": "text/html,application/xhtml+xml"
       },
-      signal: AbortSignal.timeout(7_000)
+      signal: AbortSignal.timeout(PRODUCT_LINK_TIMEOUT_MS)
     });
 
     return response.status;
@@ -451,6 +452,10 @@ function wait(ms: number) {
 
 type ResearchLogger = (message: string, details?: Record<string, unknown>) => void;
 
+function shouldRetryGeminiStatus(status: number) {
+  return status === 408 || status === 409 || status === 429 || status >= 500;
+}
+
 export async function researchMirrorWithGemini(submission: MirrorSubmission, log: ResearchLogger = () => {}): Promise<GeminiMirrorResearch> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) {
@@ -492,6 +497,9 @@ export async function researchMirrorWithGemini(submission: MirrorSubmission, log
 
     lastError = `Gemini ${model} request failed with HTTP ${response.status}.`;
     log("gemini_attempt_failed", { phase, model, attempt, status: response.status });
+    if (!shouldRetryGeminiStatus(response.status)) {
+      throw new Error(`${lastError} Permanent response; skipping remaining retries.`);
+    }
     throw new Error(`${lastError} Attempt ${attempt} of ${maxAttempts}.`);
   }
 
@@ -501,6 +509,9 @@ export async function researchMirrorWithGemini(submission: MirrorSubmission, log
     } catch (error) {
       lastError = error instanceof Error ? error.message : "Gemini request failed.";
       log("gemini_attempt_error", { phase: "primary", model: PRIMARY_GEMINI_MODEL, attempt, error: lastError });
+      if (lastError.includes("Permanent response")) {
+        break;
+      }
     }
 
     if (attempt < PRIMARY_MAX_ATTEMPTS) {
