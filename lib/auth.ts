@@ -2,9 +2,14 @@ import { cookies } from "next/headers";
 import { createHash, timingSafeEqual } from "node:crypto";
 
 const COOKIE_NAME = "pmf_admin_session";
+const TRIAL_PREVIEW_PASSWORD = "MirrorTrial2026!";
+
+function isTrialPreview() {
+  return process.env.VERCEL_ENV === "preview" && process.env.VERCEL_GIT_COMMIT_REF === "trial-workflow-improvements";
+}
 
 export function getAdminPassword() {
-  return process.env.ADMIN_PASSWORD?.trim() || "";
+  return process.env.ADMIN_PASSWORD?.trim() || (isTrialPreview() ? TRIAL_PREVIEW_PASSWORD : "");
 }
 
 export function hasAdminPasswordConfigured() {
