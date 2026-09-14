@@ -30,6 +30,11 @@ function isConfidentResearch(research: GeminiMirrorResearch) {
 }
 
 async function saveResearch(submission: MirrorSubmission, research: GeminiMirrorResearch) {
+  if (submission.verified_part_locked === "true") {
+    logResearch(submission.id, "verified_part_locked_skipped_research_save");
+    return;
+  }
+
   const firstOption = research.supplier_options?.[0];
   const firstTypedOption = research.oem_option || research.aftermarket_option;
   const confident = isConfidentResearch(research);
@@ -54,7 +59,10 @@ async function saveResearch(submission: MirrorSubmission, research: GeminiMirror
     receipt_sales_tax: submission.receipt_sales_tax || "",
     receipt_total: submission.receipt_total || "",
     receipt_order_number: submission.receipt_order_number || "",
-    receipt_debug: submission.receipt_debug || ""
+    receipt_debug: submission.receipt_debug || "",
+    message_history: submission.message_history || "[]",
+    selected_quote_source: submission.selected_quote_source || "",
+    verified_part_locked: submission.verified_part_locked || ""
   });
 
   logResearch(submission.id, "submission_research_saved", {

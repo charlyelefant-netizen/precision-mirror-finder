@@ -45,6 +45,9 @@ const createSqliteSubmissionsSql = `
     receipt_total TEXT NOT NULL DEFAULT '',
     receipt_order_number TEXT NOT NULL DEFAULT '',
     receipt_debug TEXT NOT NULL DEFAULT '',
+    message_history TEXT NOT NULL DEFAULT '[]',
+    selected_quote_source TEXT NOT NULL DEFAULT '',
+    verified_part_locked TEXT NOT NULL DEFAULT '',
     CHECK (status IN (${statusConstraint}))
   );
 `;
@@ -80,7 +83,10 @@ export const createPostgresSubmissionsSql = `
     receipt_sales_tax TEXT NOT NULL DEFAULT '',
     receipt_total TEXT NOT NULL DEFAULT '',
     receipt_order_number TEXT NOT NULL DEFAULT '',
-    receipt_debug TEXT NOT NULL DEFAULT ''
+    receipt_debug TEXT NOT NULL DEFAULT '',
+    message_history TEXT NOT NULL DEFAULT '[]',
+    selected_quote_source TEXT NOT NULL DEFAULT '',
+    verified_part_locked TEXT NOT NULL DEFAULT ''
   );
 `;
 
@@ -135,7 +141,10 @@ const sqliteColumnsToAdd = [
   "receipt_sales_tax TEXT NOT NULL DEFAULT ''",
   "receipt_total TEXT NOT NULL DEFAULT ''",
   "receipt_order_number TEXT NOT NULL DEFAULT ''",
-  "receipt_debug TEXT NOT NULL DEFAULT ''"
+  "receipt_debug TEXT NOT NULL DEFAULT ''",
+  "message_history TEXT NOT NULL DEFAULT '[]'",
+  "selected_quote_source TEXT NOT NULL DEFAULT ''",
+  "verified_part_locked TEXT NOT NULL DEFAULT ''"
 ];
 
 function migrateSqliteStatusConstraint(database: SqliteDatabase) {
@@ -160,7 +169,7 @@ function migrateSqliteStatusConstraint(database: SqliteDatabase) {
       id, created_at, vin, year, make, model, trim, features, side, color, customer_name, customer_phone, customer_email,
       status, matched_part_number, matched_part_price, supplier_name, supplier_link, estimated_shipping,
       quoted_price, notes, internal_debug, tracking_number, receipt_supplier, receipt_part_cost, receipt_shipping_cost,
-      receipt_sales_tax, receipt_total, receipt_order_number, receipt_debug
+      receipt_sales_tax, receipt_total, receipt_order_number, receipt_debug, message_history, selected_quote_source, verified_part_locked
     )
     SELECT
       id, created_at, vin, year, make, model, trim, features, side, color, customer_name, customer_phone, customer_email,
@@ -172,7 +181,7 @@ function migrateSqliteStatusConstraint(database: SqliteDatabase) {
       END,
       matched_part_number, matched_part_price, supplier_name, supplier_link, estimated_shipping,
       quoted_price, notes, internal_debug, tracking_number, receipt_supplier, receipt_part_cost, receipt_shipping_cost,
-      receipt_sales_tax, receipt_total, receipt_order_number, receipt_debug
+      receipt_sales_tax, receipt_total, receipt_order_number, receipt_debug, message_history, selected_quote_source, verified_part_locked
     FROM submissions_old;
     DROP TABLE submissions_old;
   `);
@@ -229,7 +238,10 @@ async function addMissingPostgresColumns() {
     "ADD COLUMN IF NOT EXISTS receipt_sales_tax TEXT NOT NULL DEFAULT ''",
     "ADD COLUMN IF NOT EXISTS receipt_total TEXT NOT NULL DEFAULT ''",
     "ADD COLUMN IF NOT EXISTS receipt_order_number TEXT NOT NULL DEFAULT ''",
-    "ADD COLUMN IF NOT EXISTS receipt_debug TEXT NOT NULL DEFAULT ''"
+    "ADD COLUMN IF NOT EXISTS receipt_debug TEXT NOT NULL DEFAULT ''",
+    "ADD COLUMN IF NOT EXISTS message_history TEXT NOT NULL DEFAULT '[]'",
+    "ADD COLUMN IF NOT EXISTS selected_quote_source TEXT NOT NULL DEFAULT ''",
+    "ADD COLUMN IF NOT EXISTS verified_part_locked TEXT NOT NULL DEFAULT ''"
   ];
 
   await queryPostgres(`ALTER TABLE submissions ${columns.join(", ")}`);
@@ -364,6 +376,9 @@ export async function updateSubmission(id: number, input: {
   receipt_total?: string;
   receipt_order_number?: string;
   receipt_debug?: string;
+  message_history?: string;
+  selected_quote_source?: string;
+  verified_part_locked?: string;
 }) {
   await migrateDatabase();
 
@@ -382,7 +397,10 @@ export async function updateSubmission(id: number, input: {
     receipt_sales_tax: input.receipt_sales_tax || "",
     receipt_total: input.receipt_total || "",
     receipt_order_number: input.receipt_order_number || "",
-    receipt_debug: input.receipt_debug || ""
+    receipt_debug: input.receipt_debug || "",
+    message_history: input.message_history || "[]",
+    selected_quote_source: input.selected_quote_source || "",
+    verified_part_locked: input.verified_part_locked || ""
   };
 
   if (isPostgres()) {
@@ -405,8 +423,11 @@ export async function updateSubmission(id: number, input: {
         receipt_sales_tax = $14,
         receipt_total = $15,
         receipt_order_number = $16,
-        receipt_debug = $17
-      WHERE id = $18
+        receipt_debug = $17,
+        message_history = $18,
+        selected_quote_source = $19,
+        verified_part_locked = $20
+      WHERE id = $21
     `,
       [
         values.status,
@@ -426,6 +447,9 @@ export async function updateSubmission(id: number, input: {
         values.receipt_total,
         values.receipt_order_number,
         values.receipt_debug,
+        values.message_history,
+        values.selected_quote_source,
+        values.verified_part_locked,
         id
       ]
     );
@@ -450,7 +474,10 @@ export async function updateSubmission(id: number, input: {
         receipt_sales_tax = @receipt_sales_tax,
         receipt_total = @receipt_total,
         receipt_order_number = @receipt_order_number,
-        receipt_debug = @receipt_debug
+        receipt_debug = @receipt_debug,
+        message_history = @message_history,
+        selected_quote_source = @selected_quote_source,
+        verified_part_locked = @verified_part_locked
       WHERE id = @id
     `)
     .run(values);

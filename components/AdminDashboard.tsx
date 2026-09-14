@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { ChevronDown, Filter, Loader2, LogOut } from "lucide-react";
 import { logoutAdmin, updateAdminSubmission } from "@/app/actions";
 import { AdminCallSheet } from "@/components/AdminCallSheet";
+import { AdminExportButton } from "@/components/AdminExportButton";
 import { AdminQuoteTools } from "@/components/AdminQuoteTools";
+import { AdminWorkflowPanel } from "@/components/AdminWorkflowPanel";
 import { DeleteRequestButton } from "@/components/DeleteRequestButton";
 import { ResearchQueueKicker } from "@/components/ResearchQueueKicker";
 import { StatusTrackingFields } from "@/components/StatusTrackingFields";
@@ -68,10 +70,13 @@ export function AdminDashboard({ submissions, taxRate }: { submissions: MirrorSu
           <p className="mt-2 text-sm text-muted">{submissions.length} mirror request{submissions.length === 1 ? "" : "s"} in the queue.</p>
         </div>
         <form action={logoutAdmin}>
-          <button className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink transition hover:border-brand hover:text-brand">
-            <LogOut size={16} aria-hidden="true" />
-            Sign out
-          </button>
+          <div className="flex gap-2">
+            <AdminExportButton submissions={submissions} />
+            <button className="inline-flex h-10 items-center gap-2 rounded-md border border-line bg-white px-3 text-sm font-semibold text-ink transition hover:border-brand hover:text-brand">
+              <LogOut size={16} aria-hidden="true" />
+              Sign out
+            </button>
+          </div>
         </form>
       </div>
 
@@ -156,6 +161,7 @@ export function AdminDashboard({ submissions, taxRate }: { submissions: MirrorSu
                 <form action={updateAdminSubmission} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <input type="hidden" name="id" value={submission.id} />
                   <StatusTrackingFields status={submission.status} trackingNumber={submission.tracking_number} />
+                  <AdminWorkflowPanel submission={submission} />
                   <AdminQuoteTools submission={submission} taxRate={taxRate} />
                   <label className="space-y-2 sm:col-span-2 lg:col-span-4">
                     <span className="field-label">Notes</span>

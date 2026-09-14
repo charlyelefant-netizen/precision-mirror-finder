@@ -76,7 +76,10 @@ export async function submitMirrorRequest(formData: FormData) {
     receipt_sales_tax: "",
     receipt_total: "",
     receipt_order_number: "",
-    receipt_debug: ""
+    receipt_debug: "",
+    message_history: "[]",
+    selected_quote_source: "",
+    verified_part_locked: ""
   });
 
   await enqueueResearchJob(id);
@@ -126,7 +129,10 @@ export async function updateAdminSubmission(formData: FormData) {
     receipt_sales_tax: optionalString(formData, "receipt_sales_tax"),
     receipt_total: optionalString(formData, "receipt_total"),
     receipt_order_number: optionalString(formData, "receipt_order_number"),
-    receipt_debug: optionalString(formData, "receipt_debug")
+    receipt_debug: optionalString(formData, "receipt_debug"),
+    message_history: optionalString(formData, "message_history") || "[]",
+    selected_quote_source: optionalString(formData, "selected_quote_source"),
+    verified_part_locked: optionalString(formData, "verified_part_locked")
   });
 
   revalidatePath("/admin");

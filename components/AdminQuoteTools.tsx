@@ -26,6 +26,32 @@ type QuoteMessageInput = {
   receiptSalesTax?: string;
 };
 
+type MessageRecord = {
+  type: "Estimate" | "REPLACE reply" | "DECLINE reply";
+  text: string;
+  created_at: string;
+};
+
+function parseMessageHistory(value: string) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((record): record is MessageRecord => Boolean(record?.type && record?.text && record?.created_at))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function formatMessageTime(value: string) {
+  return new Date(value).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
 function parsePrice(value: string) {
   const match = value.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
   return match ? Number(match[0]) : 0;
@@ -399,6 +425,7 @@ export function AdminQuoteTools({
   const [receiptDebug, setReceiptDebug] = useState(submission.receipt_debug || "");
   const [receiptUploadState, setReceiptUploadState] = useState<"idle" | "parsing" | "done" | "error">("idle");
   const [receiptUploadMessage, setReceiptUploadMessage] = useState("");
+  const [messageHistory, setMessageHistory] = useState<MessageRecord[]>(() => parseMessageHistory(submission.message_history));
 
   function receiptTaxOverride() {
     return receiptSalesTax.trim() ? parsePrice(receiptSalesTax) : undefined;
@@ -459,9 +486,19 @@ export function AdminQuoteTools({
     return "Thank you for letting us know. Your estimate has been declined.\nIf you decide to move forward later, feel free to contact Mirror Maven.";
   }
 
-  function setCustomerMessage(message: string) {
+  function setCustomerMessage(message: string, type?: MessageRecord["type"]) {
     setQuoteMessage(message);
     setCopied(false);
+    if (type) {
+      setMessageHistory((history) => [
+        {
+          type,
+          text: message,
+          created_at: new Date().toISOString()
+        },
+        ...history
+      ].slice(0, 12));
+    }
   }
 
   function selectOption(option: QuoteOption) {
@@ -478,7 +515,10 @@ export function AdminQuoteTools({
   }
 
   function generateMessage() {
-    setCustomerMessage(buildQuoteMessage({ totalText: quotedPrice || calculateQuote(partPrice, parsePrice(shippingCost), receiptTaxOverride()).totalText }));
+    setCustomerMessage(
+      buildQuoteMessage({ totalText: quotedPrice || calculateQuote(partPrice, parsePrice(shippingCost), receiptTaxOverride()).totalText }),
+      "Estimate"
+    );
   }
 
   async function copyMessage() {
@@ -542,6 +582,7 @@ export function AdminQuoteTools({
 
   return (
     <>
+      <input type="hidden" name="message_history" value={JSON.stringify(messageHistory)} />
       {allOptions.length ? (
         <div className="space-y-3 sm:col-span-2 lg:col-span-4">
           {partTypeOptions.length ? (
@@ -615,14 +656,14 @@ export function AdminQuoteTools({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCustomerMessage(buildProceedMessage())}
+                  onClick={() => setCustomerMessage(buildProceedMessage(), "REPLACE reply")}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 text-sm font-bold text-success transition hover:border-green-300"
                 >
                   REPLACE reply
                 </button>
                 <button
                   type="button"
-                  onClick={() => setCustomerMessage(buildDeclineMessage())}
+                  onClick={() => setCustomerMessage(buildDeclineMessage(), "DECLINE reply")}
                   className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-bold text-danger transition hover:border-red-300"
                 >
                   DECLINE reply
@@ -669,6 +710,22 @@ export function AdminQuoteTools({
                 </button>
               </div>
             </div>
+          ) : null}
+          {messageHistory.length ? (
+            <details className="rounded-md border border-line bg-field p-3">
+              <summary className="cursor-pointer text-sm font-bold text-ink">Message history ({messageHistory.length})</summary>
+              <div className="mt-3 space-y-2">
+                {messageHistory.slice(0, 5).map((record, index) => (
+                  <div key={`${record.created_at}-${index}`} className="rounded-md bg-white p-2 text-sm">
+                    <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                      <span className="font-bold text-ink">{record.type}</span>
+                      <span className="text-xs font-semibold text-muted">{formatMessageTime(record.created_at)}</span>
+                    </div>
+                    <p className="whitespace-pre-line text-muted">{record.text}</p>
+                  </div>
+                ))}
+              </div>
+            </details>
           ) : null}
         </div>
       ) : null}

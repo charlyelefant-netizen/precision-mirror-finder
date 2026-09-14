@@ -33,6 +33,9 @@ export type MirrorSubmission = {
   receipt_total: string;
   receipt_order_number: string;
   receipt_debug: string;
+  message_history: string;
+  selected_quote_source: string;
+  verified_part_locked: string;
 };
 
 export type SubmissionRow = Omit<MirrorSubmission, "created_at" | "features"> & {
