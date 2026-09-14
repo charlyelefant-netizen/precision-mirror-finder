@@ -417,7 +417,7 @@ export function AdminQuoteTools({
     setPartPrice(nextPartCost || partPrice);
     setShippingCost(String(parsePrice(nextShippingCost)));
     setQuotedPrice(newQuote.totalText);
-    setQuoteMessage(buildQuoteMessage({
+    setCustomerMessage(buildQuoteMessage({
       totalText: newQuote.totalText,
       receiptPartCost: nextPartCost,
       receiptShippingCost: nextShippingCost,
@@ -447,6 +447,23 @@ export function AdminQuoteTools({
     return `Hi, this is Mirror Maven. The estimate for your ${sideLabel} side mirror replacement is **${amount}**.\nPlease reply **REPLACE** to move forward or **DECLINE** if you do not wish to proceed.`;
   }
 
+  function deliveryTimeframe() {
+    return estimatedShipping.trim() || "2-3 business days";
+  }
+
+  function buildProceedMessage() {
+    return `Thank you. Your mirror has been ordered and should arrive within **${deliveryTimeframe()}**.\nWe’ll message you as soon as it comes in and schedule the replacement at your location as soon as possible.`;
+  }
+
+  function buildDeclineMessage() {
+    return "Thank you for letting us know. Your estimate has been declined.\nIf you decide to move forward later, feel free to contact Mirror Maven.";
+  }
+
+  function setCustomerMessage(message: string) {
+    setQuoteMessage(message);
+    setCopied(false);
+  }
+
   function selectOption(option: QuoteOption) {
     const price = option.price;
     const calculatedQuote = calculateQuote(price, option.shipping_cost).totalText;
@@ -457,13 +474,11 @@ export function AdminQuoteTools({
     setSupplierLink(option.product_link);
     setEstimatedShipping(option.estimated_shipping);
     setQuotedPrice(calculatedQuote);
-    setQuoteMessage(buildQuoteMessage({ totalText: calculatedQuote }));
-    setCopied(false);
+    setCustomerMessage(buildQuoteMessage({ totalText: calculatedQuote }));
   }
 
   function generateMessage() {
-    setQuoteMessage(buildQuoteMessage({ totalText: quotedPrice || calculateQuote(partPrice, parsePrice(shippingCost), receiptTaxOverride()).totalText }));
-    setCopied(false);
+    setCustomerMessage(buildQuoteMessage({ totalText: quotedPrice || calculateQuote(partPrice, parsePrice(shippingCost), receiptTaxOverride()).totalText }));
   }
 
   async function copyMessage() {
@@ -497,6 +512,7 @@ export function AdminQuoteTools({
       const parsedSupplier = parsed.supplier || supplierName;
       const parsedOrderTotal = parsed.order_total || "";
       const parsedOrderNumber = parsed.order_number || "";
+      const parsedEstimatedDelivery = parsed.estimated_delivery || "";
       setReceiptSupplier(parsedSupplier);
       setReceiptPartCost(parsedPartCost);
       setReceiptShippingCost(parsedShippingCost);
@@ -505,6 +521,9 @@ export function AdminQuoteTools({
       setReceiptOrderNumber(parsedOrderNumber);
       setReceiptDebug(JSON.stringify(parsed.raw || parsed, null, 2));
       setSupplierName(parsedSupplier || supplierName);
+      if (parsedEstimatedDelivery) {
+        setEstimatedShipping(parsedEstimatedDelivery);
+      }
       applyReceiptNumbers(parsedPartCost, parsedShippingCost, parsedSalesTax);
       setReceiptUploadState("done");
       const recognizedSupplier = parsedSupplier ? ` as ${parsedSupplier}` : "";
@@ -581,16 +600,36 @@ export function AdminQuoteTools({
 
       {(supplierLink || partNumber || vehicleSearchLabel(submission)) ? (
         <div className="space-y-3 rounded-md border border-line bg-white p-4 sm:col-span-2 lg:col-span-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <button
-              type="button"
-              onClick={generateMessage}
-              disabled={!partPrice && !receiptPartCost}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-brand bg-white px-3 text-sm font-bold text-brand transition hover:bg-brand-soft"
-            >
-              <MessageSquare size={16} aria-hidden="true" />
-              Generate Quote Message
-            </button>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-2">
+              <span className="field-label">Messages</span>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={generateMessage}
+                  disabled={!partPrice && !receiptPartCost}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-brand bg-white px-3 text-sm font-bold text-brand transition hover:bg-brand-soft"
+                >
+                  <MessageSquare size={16} aria-hidden="true" />
+                  Estimate
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomerMessage(buildProceedMessage())}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 text-sm font-bold text-success transition hover:border-green-300"
+                >
+                  REPLACE reply
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomerMessage(buildDeclineMessage())}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-bold text-danger transition hover:border-red-300"
+                >
+                  DECLINE reply
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 lg:min-w-[420px]">
             {supplierLink ? (
               <a
                 href={supplierLink}
@@ -614,6 +653,7 @@ export function AdminQuoteTools({
             >
               Search Amazon <ExternalLink size={15} aria-hidden="true" />
             </a>
+            </div>
           </div>
           {quoteMessage ? (
             <div className="space-y-2">

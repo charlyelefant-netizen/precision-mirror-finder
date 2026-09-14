@@ -16,10 +16,11 @@ const receiptSchema = {
     sales_tax: { type: "number" },
     order_total: { type: "number" },
     order_number: { type: "string" },
+    estimated_delivery: { type: "string" },
     confidence: { type: "string", enum: ["high", "medium", "low"] },
     notes: { type: "string" }
   },
-  required: ["supplier", "merchant_name", "supplier_evidence", "part_cost", "shipping_cost", "sales_tax", "order_total", "order_number", "confidence", "notes"]
+  required: ["supplier", "merchant_name", "supplier_evidence", "part_cost", "shipping_cost", "sales_tax", "order_total", "order_number", "estimated_delivery", "confidence", "notes"]
 };
 
 const RECEIPT_PRIMARY_MODEL = "gemini-3.5-flash-lite";
@@ -58,6 +59,7 @@ function emptyResult(reason: string) {
     sales_tax: "",
     order_total: "",
     order_number: "",
+    estimated_delivery: "",
     confidence: "low",
     notes: reason
   };
@@ -104,6 +106,7 @@ function normalizeParsedReceipt(parsed: Record<string, unknown>) {
     sales_tax: formatMoney(salesTax),
     order_total: orderTotal ? formatMoney(orderTotal) : "",
     order_number: String(parsed.order_number || ""),
+    estimated_delivery: String(parsed.estimated_delivery || "").trim(),
     confidence: parsed.confidence === "high" || parsed.confidence === "medium" ? parsed.confidence : "low",
     notes: String(parsed.notes || ""),
     raw: {
@@ -116,6 +119,7 @@ function normalizeParsedReceipt(parsed: Record<string, unknown>) {
       sales_tax: salesTax,
       order_total: orderTotal,
       order_number: parsed.order_number || "",
+      estimated_delivery: parsed.estimated_delivery || "",
       confidence: parsed.confidence || "low",
       notes: parsed.notes || ""
     }
@@ -167,6 +171,7 @@ async function parseReceiptWithGemini({
                 "If an eBay seller or Amazon third-party seller is visible, put that seller in merchant_name while keeping supplier as eBay or Amazon.",
                 "Put the visible clue used to identify supplier in supplier_evidence.",
                 "Extract part_cost before shipping/tax, shipping_cost, sales_tax, order_total, and order_number.",
+                "Extract estimated_delivery as the visible delivery timeframe or arrival date, such as 2-3 business days, Arrives Tuesday, or Sep 18. Return an empty string if no delivery timing is visible.",
                 "Use 0 for missing shipping or tax only when the receipt clearly shows free shipping/no tax.",
                 "Do not include customer quote markup."
               ].join(" ")
