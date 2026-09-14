@@ -21,11 +21,9 @@ type QuoteOption = {
 
 type QuoteMessageInput = {
   totalText?: string;
-  deliveryText?: string;
   receiptPartCost?: string;
   receiptShippingCost?: string;
   receiptSalesTax?: string;
-  receiptSupplier?: string;
 };
 
 function parsePrice(value: string) {
@@ -414,46 +412,39 @@ export function AdminQuoteTools({
     setQuotedPrice(calculateQuote(price, shipping, receiptTaxOverride()).totalText);
   }
 
-  function applyReceiptNumbers(nextPartCost: string, nextShippingCost: string, nextSalesTax: string, nextSupplier = receiptSupplier) {
+  function applyReceiptNumbers(nextPartCost: string, nextShippingCost: string, nextSalesTax: string) {
     const newQuote = calculateQuote(nextPartCost || partPrice, parsePrice(nextShippingCost), nextSalesTax.trim() ? parsePrice(nextSalesTax) : undefined);
     setPartPrice(nextPartCost || partPrice);
     setShippingCost(String(parsePrice(nextShippingCost)));
     setQuotedPrice(newQuote.totalText);
     setQuoteMessage(buildQuoteMessage({
       totalText: newQuote.totalText,
-      deliveryText: estimatedShipping,
       receiptPartCost: nextPartCost,
       receiptShippingCost: nextShippingCost,
-      receiptSalesTax: nextSalesTax,
-      receiptSupplier: nextSupplier
+      receiptSalesTax: nextSalesTax
     }));
   }
 
   function buildQuoteMessage(input: QuoteMessageInput = {}) {
-    const vehicle = vehicleLabel(submission);
-    const oemChoice = oemOption;
-    const aftermarketChoice = aftermarketOption;
     const currentReceiptPartCost = input.receiptPartCost ?? receiptPartCost;
     const currentReceiptShippingCost = input.receiptShippingCost ?? receiptShippingCost;
     const currentReceiptSalesTax = input.receiptSalesTax ?? receiptSalesTax;
-    const currentReceiptSupplier = input.receiptSupplier ?? receiptSupplier;
     const hasReceiptPrice = Boolean(currentReceiptPartCost.trim());
-    const genericTotal = hasReceiptPrice
+    const calculatedReceiptTotal = hasReceiptPrice
       ? calculateQuote(
           currentReceiptPartCost,
           parsePrice(currentReceiptShippingCost),
           currentReceiptSalesTax.trim() ? parsePrice(currentReceiptSalesTax) : undefined
         ).totalText
-      : aftermarketChoice
-        ? calculateQuote(aftermarketChoice.price, aftermarketChoice.shipping_cost).totalText
-        : "";
-    const genericDescription = hasReceiptPrice
-      ? `${currentReceiptSupplier || "generic/aftermarket"} option`
-      : "quality aftermarket option";
+      : "";
+    const amount = input.totalText || calculatedReceiptTotal || quotedPrice || calculateQuote(partPrice, parsePrice(shippingCost), receiptTaxOverride()).totalText;
+    const sideLabel = submission.side.toLowerCase().includes("passenger")
+      ? "passenger"
+      : submission.side.toLowerCase().includes("driver")
+        ? "driver"
+        : submission.side.toLowerCase() || "requested";
 
-    return oemChoice && (aftermarketChoice || hasReceiptPrice)
-      ? `Hi ${submission.customer_name}, we found two options for your ${vehicle} mirror: OEM (manufacturer) part for ${calculateQuote(oemChoice.price, oemChoice.shipping_cost).totalText}, or a ${genericDescription} for ${genericTotal}. Let me know which you'd prefer!`
-      : `Hi ${submission.customer_name}, your ${vehicle} mirror is ready to quote: ${input.totalText || calculateQuote(partPrice, parsePrice(shippingCost), receiptTaxOverride()).totalText} total, estimated delivery in ${input.deliveryText || "the listed timeframe"}. Let me know if you'd like to move forward!`;
+    return `Hi, this is Mirror Maven. The estimate for your ${sideLabel} side mirror replacement is **${amount}**.\nPlease reply **REPLACE** to move forward or **DECLINE** if you do not wish to proceed.`;
   }
 
   function selectOption(option: QuoteOption) {
@@ -466,12 +457,12 @@ export function AdminQuoteTools({
     setSupplierLink(option.product_link);
     setEstimatedShipping(option.estimated_shipping);
     setQuotedPrice(calculatedQuote);
-    setQuoteMessage(buildQuoteMessage({ totalText: calculatedQuote, deliveryText: option.estimated_shipping }));
+    setQuoteMessage(buildQuoteMessage({ totalText: calculatedQuote }));
     setCopied(false);
   }
 
   function generateMessage() {
-    setQuoteMessage(buildQuoteMessage({ totalText: quotedPrice || calculateQuote(partPrice, parsePrice(shippingCost), receiptTaxOverride()).totalText, deliveryText: estimatedShipping }));
+    setQuoteMessage(buildQuoteMessage({ totalText: quotedPrice || calculateQuote(partPrice, parsePrice(shippingCost), receiptTaxOverride()).totalText }));
     setCopied(false);
   }
 
@@ -514,7 +505,7 @@ export function AdminQuoteTools({
       setReceiptOrderNumber(parsedOrderNumber);
       setReceiptDebug(JSON.stringify(parsed.raw || parsed, null, 2));
       setSupplierName(parsedSupplier || supplierName);
-      applyReceiptNumbers(parsedPartCost, parsedShippingCost, parsedSalesTax, parsedSupplier);
+      applyReceiptNumbers(parsedPartCost, parsedShippingCost, parsedSalesTax);
       setReceiptUploadState("done");
       const recognizedSupplier = parsedSupplier ? ` as ${parsedSupplier}` : "";
       setReceiptUploadMessage(parsed.confidence === "low" ? `Check these numbers: ${parsed.notes || "low confidence parse"}` : `Receipt read${recognizedSupplier}. Review the numbers, then save.`);
